@@ -1,0 +1,117 @@
+# Builds the Windows installer (and Linux binary) on GitHub's servers,
+# so you never install Go/Node/Wails locally.
+#
+# - Push a tag like v0.1.0  -> full Release with installer attached.
+# - Any push / manual run   -> Artifacts you can download from the Actions tab.
+#
+# First run: open the Actions tab of your repo and download
+#   reclip-<version>-installer.exe  (Windows)  or  reclip-linux.tar.gz (Ubuntu).
+
+name: Build
+
+on:
+  push:
+    branches: [main, master]
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
+
+      - name: Build installer (app + ffmpeg + yt-dlp)
+        run: |
+          $env:PATH += ";$(go env GOPATH)\bin"
+          powershell -ExecutionPolicy Bypass -File scripts\package-windows.ps1
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: reclip-windows-installer
+          path: build/bin/*installer*.exe
+
+  ubuntu:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: System deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential pkg-config
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
+
+      - name: Build
+        run: |
+          export PATH="$PATH:$(go env GOPATH)/bin"
+          wails build
+
+      - name: Pack with sidecars
+        run: |
+          bash scripts/fetch-sidecars.sh linux
+          mkdir -p dist
+          cp build/bin/reclip dist/reclip-linux
+          cp sidecar/linux/ffmpeg sidecar/linux/yt-dlp dist/
+          tar -czf reclip-linux.tar.gz -C dist .
+
+      - name: Upload bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: reclip-linux
+          path: reclip-linux.tar.gz
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [windows, ubuntu]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            artifacts/reclip-windows-installer/*
+            artifacts/reclip-linux/*
