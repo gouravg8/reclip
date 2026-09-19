@@ -12,7 +12,7 @@
 #>
 $ErrorActionPreference = "Stop"
 
-$Root = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
+$Root = Split-Path $PSScriptRoot -Parent
 $Bin = Join-Path $Root "build\bin"
 $YtDlpUrl = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe"
 
@@ -57,10 +57,15 @@ Get-ChildItem $Bin -Include ffmpeg.exe, yt-dlp.exe | ForEach-Object {
 Push-Location $Root
 try {
   wails build --nsis
+  # Native exit codes don't trigger $ErrorActionPreference — check manually.
+  if ($LASTEXITCODE -ne 0) { throw "wails build failed with exit code $LASTEXITCODE" }
 } finally {
   Pop-Location
 }
 
 Get-ChildItem (Join-Path $Bin "*installer*.exe") | ForEach-Object {
   Write-Host ("Installer: {0}" -f $_.FullName)
+}
+if (-not (Get-ChildItem (Join-Path $Bin "*installer*.exe"))) {
+  throw "No installer produced — NSIS step failed silently. See wails build output above."
 }

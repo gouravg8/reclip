@@ -50,6 +50,7 @@ jobs:
         with:
           name: reclip-windows-installer
           path: build/bin/*installer*.exe
+          if-no-files-found: error
 
   ubuntu:
     runs-on: ubuntu-24.04
@@ -95,7 +96,10 @@ jobs:
         with:
           name: reclip-linux
           path: reclip-linux.tar.gz
+          if-no-files-found: error
 
+  # Manual releases only: push a v* tag (or run `gh release create` locally).
+  # Every other build just leaves downloadable Artifacts (90 days).
   release:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: [windows, ubuntu]
@@ -109,6 +113,7 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
+          fail_on_unmatched_files: true
           files: |
             artifacts/reclip-windows-installer/*
             artifacts/reclip-linux/*
