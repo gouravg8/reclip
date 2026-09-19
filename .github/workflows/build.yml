@@ -40,6 +40,9 @@ jobs:
       - name: Install Wails CLI
         run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
 
+      - name: Install NSIS (installer compiler)
+        run: choco install nsis -y --no-progress
+
       - name: Build installer (app + ffmpeg + yt-dlp)
         run: |
           $env:PATH += ";$(go env GOPATH)\bin"
