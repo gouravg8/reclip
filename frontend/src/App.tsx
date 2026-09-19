@@ -1,9 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, Button, Card, Input, Layout, Space, Table, Tag, Typography } from "antd";
+import {
+  Alert,
+  Button,
+  Card,
+  Checkbox,
+  Input,
+  Layout,
+  Select,
+  Space,
+  Table,
+  Tag,
+  Typography,
+} from "antd";
 import {
   CheckCircleOutlined,
   DeleteOutlined,
   DownloadOutlined,
+  ExportOutlined,
   FolderOpenOutlined,
   UploadOutlined,
   VideoCameraOutlined,
@@ -12,6 +25,8 @@ import {
   CheckDeps,
   ClearCreditPreset,
   DownloadReel,
+  ExportBatch,
+  ExportOne,
   GetCreditPreset,
   ProbeVideo,
   SaveCreditPreset,
@@ -27,6 +42,7 @@ import {
   formatBytes,
   formatDuration,
   newId,
+  type CreditMode,
   type EditSpec,
   type ItemStatus,
   type QueueItem,
@@ -34,6 +50,7 @@ import {
 import Editor from "./Editor";
 
 const OUTDIR_KEY = "reclip:outdir";
+const CREDIT_ALL_KEY = "reclip:creditAll";
 
 const statusColor: Record<ItemStatus, string> = {
   queued: "default",
@@ -57,6 +74,9 @@ export default function App() {
   const [credit, setCredit] = useState("");
   const [creditInfo, setCreditInfo] = useState<main.VideoInfo | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [addCreditAll, setAddCreditAll] = useState(true);
+  const [batchBusy, setBatchBusy] = useState(false);
+  const [exporting, setExporting] = useState<string[]>([]);
   const [notice, setNotice] = useState<{ type: "error" | "warning"; text: string } | null>(null);
 
   const activeId = useRef<string | null>(null);
@@ -86,6 +106,26 @@ export default function App() {
     };
   }, [patchItem]);
 
+  // Backend export progress events -> per-item export state.
+  useEffect(() => {
+    const off = EventsOn(
+      "reclip:export-progress",
+      (p: { id: string; phase: string; done: number; total: number }) => {
+        const frac = p.total > 0 ? Math.min(1, Math.max(0, p.done / p.total)) : 0;
+        setItems((prev) =>
+          prev.map((it) =>
+            it.id === p.id
+              ? { ...it, exportState: { ...it.exportState, phase: p.phase, frac } }
+              : it,
+          ),
+        );
+      },
+    );
+    return () => {
+      off();
+    };
+  }, []);
+
   // Initial load: deps, saved credit, saved output dir.
   useEffect(() => {
     CheckDeps()
@@ -103,6 +143,7 @@ export default function App() {
       })
       .catch(() => {});
     setOutDir(localStorage.getItem(OUTDIR_KEY) ?? "");
+    setAddCreditAll(localStorage.getItem(CREDIT_ALL_KEY) !== "0");
   }, []);
 
   const missingDeps = deps
@@ -206,6 +247,7 @@ export default function App() {
         name: url,
         status: "queued",
         edit: defaultEdit(),
+        credit: "inherit",
       });
     }
     if (fresh.length === 0) {
@@ -230,6 +272,7 @@ export default function App() {
         name: basename(p),
         status: "queued" as const,
         edit: defaultEdit(),
+        credit: "inherit" as const,
       }));
       setItems((prev) => [...prev, ...fresh]);
       for (const it of fresh) {
@@ -292,6 +335,110 @@ export default function App() {
     (id: string, edit: EditSpec) => patchItem(id, { edit }),
     [patchItem],
   );
+
+  const setCreditMode = useCallback(
+    (id: string, mode: CreditMode) => patchItem(id, { credit: mode }),
+    [patchItem],
+  );
+
+  const pickCustomCredit = useCallback(async () => {
+    try {
+      const file = await SelectCreditFile();
+      if (!file) return null;
+      return file;
+    } catch (e) {
+      setNotice({ type: "error", text: backendError(e) });
+      return null;
+    }
+  }, []);
+
+  const toggleCreditAll = useCallback((on: boolean) => {
+    setAddCreditAll(on);
+    localStorage.setItem(CREDIT_ALL_KEY, on ? "1" : "0");
+  }, []);
+
+  function resolveCreditFor(it: QueueItem): string {
+    if (it.credit === "none") return "";
+    if (it.credit === "custom") return it.customCredit ?? "";
+    return addCreditAll ? credit : "";
+  }
+
+  function outputNameFor(it: QueueItem): string {
+    const base = basename(it.path || it.url || it.id).replace(/\.[a-zA-Z0-9]+$/, "");
+    return `${base}_reclip.mp4`;
+  }
+
+  function buildJobJSON(it: QueueItem): string {
+    return JSON.stringify({
+      id: it.id,
+      input: it.path,
+      output: `${outDir}/${outputNameFor(it)}`,
+      edit: {
+        trimStart: it.edit.trimStart,
+        trimEnd: it.edit.trimEnd,
+        cuts: it.edit.cuts,
+        zoom: it.edit.zoom,
+        panX: it.edit.panX,
+        panY: it.edit.panY,
+      },
+      creditPath: resolveCreditFor(it),
+    });
+  }
+
+  const exportOneItem = useCallback(
+    async (id: string) => {
+      const it = itemsRef.current.find((i) => i.id === id);
+      if (!it || it.status !== "ready") return;
+      if (!outDir) {
+        setNotice({ type: "warning", text: "Pick a download/export folder first." });
+        return;
+      }
+      setExporting((prev) => [...prev, id]);
+      patchItem(id, { exportState: { phase: "starting", frac: 0 } });
+      try {
+        const res = await ExportOne(buildJobJSON(it));
+        if (res.error) {
+          patchItem(id, { exportState: { phase: "error", frac: 0, error: res.error } });
+        } else {
+          patchItem(id, { exportState: { phase: "done", frac: 1, outPath: res.output } });
+        }
+      } catch (e) {
+        patchItem(id, { exportState: { phase: "error", frac: 0, error: backendError(e) } });
+      } finally {
+        setExporting((prev) => prev.filter((x) => x !== id));
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [outDir, addCreditAll, credit, patchItem],
+  );
+
+  const exportAllReady = useCallback(async () => {
+    const ready = itemsRef.current.filter((it) => it.status === "ready");
+    if (ready.length === 0 || batchBusy) return;
+    if (!outDir) {
+      setNotice({ type: "warning", text: "Pick a download/export folder first." });
+      return;
+    }
+    setBatchBusy(true);
+    for (const it of ready) {
+      patchItem(it.id, { exportState: { phase: "queued", frac: 0 } });
+    }
+    try {
+      const results = await ExportBatch(JSON.stringify(ready.map(buildJobJSON)));
+      for (const res of results) {
+        if (res.error) {
+          patchItem(res.id, { exportState: { phase: "error", frac: 0, error: res.error } });
+        } else {
+          patchItem(res.id, { exportState: { phase: "done", frac: 1, outPath: res.output } });
+        }
+      }
+    } catch (e) {
+      setNotice({ type: "error", text: backendError(e) });
+    } finally {
+      setBatchBusy(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [batchBusy, outDir, addCreditAll, credit, patchItem]);
 
   const readyCount = items.filter((it) => it.status === "ready").length;
   const selected = items.find((it) => it.id === selectedId) ?? null;
@@ -477,20 +624,124 @@ export default function App() {
                 },
               },
               {
-                title: "",
-                width: 50,
+                title: "Credit",
+                width: 150,
                 render: (_, it) => (
-                  <Button
-                    size="small"
-                    danger
-                    type="text"
-                    icon={<DeleteOutlined />}
-                    onClick={() => removeItem(it.id)}
-                  />
+                  <Space direction="vertical" size={2} className="w-full">
+                    <Select<CreditMode>
+                      size="small"
+                      className="w-full"
+                      value={it.credit}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(v) => setCreditMode(it.id, v)}
+                      options={[
+                        {
+                          value: "inherit",
+                          label: addCreditAll ? "Default (on)" : "Default (off)",
+                        },
+                        { value: "none", label: "None" },
+                        { value: "custom", label: "Custom…" },
+                      ]}
+                    />
+                    {it.credit === "custom" && (
+                      <Button
+                        size="small"
+                        type="link"
+                        className="!p-0 text-xs"
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          const f = await pickCustomCredit();
+                          if (f) patchItem(it.id, { customCredit: f });
+                        }}
+                      >
+                        {it.customCredit ? basename(it.customCredit) : "pick file…"}
+                      </Button>
+                    )}
+                  </Space>
+                ),
+              },
+              {
+                title: "Export",
+                ellipsis: true,
+                render: (_, it) => {
+                  const xs = it.exportState;
+                  if (it.status !== "ready")
+                    return <Typography.Text type="secondary">…</Typography.Text>;
+                  if (xs?.phase === "done" && xs.outPath)
+                    return (
+                      <Typography.Text type="success" ellipsis title={xs.outPath}>
+                        ✓ {basename(xs.outPath)}
+                      </Typography.Text>
+                    );
+                  if (xs && xs.phase !== "error" && (exporting.includes(it.id) || batchBusy))
+                    return (
+                      <Typography.Text type="secondary">
+                        {xs.phase} {Math.round(xs.frac * 100)}%
+                      </Typography.Text>
+                    );
+                  if (xs?.phase === "error")
+                    return <Typography.Text type="danger">{xs.error}</Typography.Text>;
+                  return <Typography.Text type="secondary">ready</Typography.Text>;
+                },
+              },
+              {
+                title: "",
+                width: 90,
+                render: (_, it) => (
+                  <Space size={0}>
+                    {it.status === "ready" && (
+                      <Button
+                        size="small"
+                        type="text"
+                        icon={<ExportOutlined />}
+                        title="Export this video"
+                        loading={exporting.includes(it.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void exportOneItem(it.id);
+                        }}
+                      />
+                    )}
+                    <Button
+                      size="small"
+                      danger
+                      type="text"
+                      icon={<DeleteOutlined />}
+                      onClick={() => removeItem(it.id)}
+                    />
+                  </Space>
                 ),
               },
             ]}
           />
+        </Card>
+
+        <Card
+          title={`5 · Export all (1080×1920 + credit)`}
+          size="small"
+          extra={
+            <Button
+              type="primary"
+              size="small"
+              icon={<ExportOutlined />}
+              loading={batchBusy}
+              disabled={readyCount === 0}
+              onClick={() => void exportAllReady()}
+            >
+              Export all ({readyCount})
+            </Button>
+          }
+        >
+          <Space direction="vertical" className="w-full">
+            <Checkbox checked={addCreditAll} onChange={(e) => toggleCreditAll(e.target.checked)}>
+              Add credit video to all exports
+            </Checkbox>
+            <Typography.Text type="secondary" className="text-xs">
+              {credit
+                ? `Default credit: ${basename(credit)}. Per-video override in the Credit column. Files land in the download folder as <name>_reclip.mp4.`
+                : "No default credit set — add one in section 2, or pick per-video Custom files."}
+            </Typography.Text>
+          </Space>
         </Card>
 
         {selectedReady ? (

@@ -21,6 +21,7 @@ type VideoInfo struct {
 	Height    int     `json:"height"`
 	FPS       float64 `json:"fps"`
 	SizeBytes int64   `json:"sizeBytes"`
+	HasAudio  bool    `json:"hasAudio"`
 }
 
 // Deps reports the availability of external binaries.
@@ -145,14 +146,17 @@ func (a *App) ProbeVideo(path string) (VideoInfo, error) {
 		return info, fmt.Errorf("parse ffprobe output: %w", err)
 	}
 	for _, s := range probed.Streams {
-		if s.CodecType == "video" {
+		if s.CodecType == "audio" {
+			info.HasAudio = true
+			continue
+		}
+		if s.CodecType == "video" && info.Width == 0 {
 			info.Width = s.Width
 			info.Height = s.Height
 			info.FPS = parseFPS(s.AvgFrameRate)
 			if d, err := strconv.ParseFloat(s.Duration, 64); err == nil && d > 0 {
 				info.Duration = d
 			}
-			break
 		}
 	}
 	if info.Duration == 0 {

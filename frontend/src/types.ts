@@ -18,6 +18,22 @@ export interface QueueItem {
   error?: string;
   info?: VideoInfo;
   edit: EditSpec;
+  /** Credit choice: inherit = follow the global toggle. */
+  credit: CreditMode;
+  customCredit?: string;
+  exportState?: ExportState;
+}
+
+/** Per-item credit override. */
+export type CreditMode = "inherit" | "none" | "custom";
+
+/** Live export status for one queue item. */
+export interface ExportState {
+  phase: string;
+  /** 0..1 progress within the current export. */
+  frac: number;
+  outPath?: string;
+  error?: string;
 }
 
 /** A [start, end) section (seconds, source timeline) removed on export. */
