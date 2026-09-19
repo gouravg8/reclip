@@ -22,6 +22,9 @@ func main() {
 		Height: 768,
 		AssetServer: &assetserver.Options{
 			Assets: assets,
+			// Serves /localfile?path=… for <video> previews of
+			// downloaded/uploaded reels (with Range seeking).
+			Handler: localFileHandler(),
 		},
 		BackgroundColour: &options.RGBA{R: 27, G: 38, B: 54, A: 1},
 		OnStartup:        app.startup,

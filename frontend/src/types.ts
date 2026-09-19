@@ -17,6 +17,45 @@ export interface QueueItem {
   progress?: string;
   error?: string;
   info?: VideoInfo;
+  edit: EditSpec;
+}
+
+/** A [start, end) section (seconds, source timeline) removed on export. */
+export interface CutRange {
+  start: number;
+  end: number;
+}
+
+/**
+ * Per-video edit decisions. Times are seconds on the source timeline.
+ * trimEnd of 0 means "to the end". Zoom is a scale factor around the
+ * center; panX/panY are CSS-style translate percentages applied before
+ * scaling (mirrored by the ffmpeg crop in the exporter).
+ */
+export interface EditSpec {
+  trimStart: number;
+  trimEnd: number;
+  cuts: CutRange[];
+  zoom: number;
+  panX: number;
+  panY: number;
+}
+
+export function defaultEdit(): EditSpec {
+  return { trimStart: 0, trimEnd: 0, cuts: [], zoom: 1, panX: 0, panY: 0 };
+}
+
+/** Seconds kept after trim + cuts. */
+export function outputDuration(sourceDuration: number, edit: EditSpec): number {
+  const end = edit.trimEnd > 0 ? Math.min(edit.trimEnd, sourceDuration) : sourceDuration;
+  const start = Math.min(Math.max(0, edit.trimStart), end);
+  let out = Math.max(0, end - start);
+  for (const c of edit.cuts) {
+    const cs = Math.max(c.start, start);
+    const ce = Math.min(c.end, end);
+    if (ce > cs) out -= ce - cs;
+  }
+  return Math.max(0, Math.round(out * 10) / 10);
 }
 
 export function basename(p: string): string {

@@ -23,12 +23,15 @@ import { EventsOn } from "../wailsjs/runtime/runtime";
 import type { main } from "../wailsjs/go/models";
 import {
   basename,
+  defaultEdit,
   formatBytes,
   formatDuration,
   newId,
+  type EditSpec,
   type ItemStatus,
   type QueueItem,
 } from "./types";
+import Editor from "./Editor";
 
 const OUTDIR_KEY = "reclip:outdir";
 
@@ -53,6 +56,7 @@ export default function App() {
   const [outDir, setOutDir] = useState("");
   const [credit, setCredit] = useState("");
   const [creditInfo, setCreditInfo] = useState<main.VideoInfo | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ type: "error" | "warning"; text: string } | null>(null);
 
   const activeId = useRef<string | null>(null);
@@ -110,7 +114,12 @@ export default function App() {
       patchItem(id, { status: "probing", progress: undefined });
       try {
         const info = await ProbeVideo(path);
-        patchItem(id, { status: "ready", info, name: basename(path) });
+        patchItem(id, {
+          status: "ready",
+          info,
+          name: basename(path),
+          edit: { ...defaultEdit(), trimEnd: info.duration },
+        });
       } catch (e) {
         patchItem(id, { status: "error", error: backendError(e) });
       }
@@ -196,6 +205,7 @@ export default function App() {
         path: "",
         name: url,
         status: "queued",
+        edit: defaultEdit(),
       });
     }
     if (fresh.length === 0) {
@@ -219,6 +229,7 @@ export default function App() {
         path: p,
         name: basename(p),
         status: "queued" as const,
+        edit: defaultEdit(),
       }));
       setItems((prev) => [...prev, ...fresh]);
       for (const it of fresh) {
@@ -270,13 +281,21 @@ export default function App() {
 
   const removeItem = useCallback((id: string) => {
     setItems((prev) => prev.filter((it) => it.id !== id));
+    setSelectedId((sel) => (sel === id ? null : sel));
   }, []);
 
   const clearFinished = useCallback(() => {
     setItems((prev) => prev.filter((it) => it.status !== "ready" && it.status !== "error"));
   }, []);
 
+  const changeEdit = useCallback(
+    (id: string, edit: EditSpec) => patchItem(id, { edit }),
+    [patchItem],
+  );
+
   const readyCount = items.filter((it) => it.status === "ready").length;
+  const selected = items.find((it) => it.id === selectedId) ?? null;
+  const selectedReady = selected?.status === "ready" && selected.info ? selected : null;
   const stuckCount = items.filter(
     (it) => it.source === "link" && (it.status === "queued" || it.status === "error"),
   ).length;
@@ -405,6 +424,12 @@ export default function App() {
             pagination={false}
             dataSource={items}
             locale={{ emptyText: "Paste links or upload files to begin" }}
+            rowSelection={{
+              type: "radio",
+              selectedRowKeys: selectedId ? [selectedId] : [],
+              onChange: (keys) => setSelectedId((keys[0] as string) ?? null),
+            }}
+            onRow={(it) => ({ onClick: () => setSelectedId(it.id) })}
             columns={[
               {
                 title: "Video",
@@ -467,6 +492,18 @@ export default function App() {
             ]}
           />
         </Card>
+
+        {selectedReady ? (
+          <Editor item={selectedReady} onChange={(edit) => changeEdit(selectedReady.id, edit)} />
+        ) : (
+          selected && (
+            <Card size="small">
+              <Typography.Text type="secondary">
+                Select a ready video to edit (this one is {selected.status}).
+              </Typography.Text>
+            </Card>
+          )
+        )}
       </Layout.Content>
     </Layout>
   );
