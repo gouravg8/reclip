@@ -1,0 +1,30 @@
+# Wails build output
+build/bin
+/frontend/dist
+
+# Deps
+node_modules
+frontend/node_modules
+
+# Lockfiles - keep pnpm-lock.yaml, ignore npm
+package-lock.json
+frontend/package-lock.json
+
+# Go
+*.exe
+*.test
+*.out
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.idea
+.vscode/*
+!.vscode/extensions.json
+
+# Local media / downloads (user videos, never commit)
+downloads/
+output/
+*.mp4
+*.mov
+*.mkv
