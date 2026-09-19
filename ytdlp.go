@@ -10,16 +10,14 @@ import (
 	"time"
 )
 
-// ytDlpVersion is pinned so app, scripts and docs fetch the same build.
-const ytDlpVersion = "2025.01.01"
-
 // ytDlpAsset maps the OS to the upstream release asset name.
+// (Documented names from the yt-dlp README: plain `yt-dlp` for Linux.)
 func ytDlpAsset() (string, error) {
 	switch runtime.GOOS {
 	case "windows":
 		return "yt-dlp.exe", nil
 	case "linux":
-		return "yt-dlp_linux", nil
+		return "yt-dlp", nil
 	case "darwin":
 		return "yt-dlp_macos", nil
 	default:
@@ -27,15 +25,13 @@ func ytDlpAsset() (string, error) {
 	}
 }
 
+// Latest release is used (not a pinned version) so the URL never rots.
 func ytDlpDownloadURL() (string, error) {
 	asset, err := ytDlpAsset()
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf(
-		"https://github.com/yt-dlp/yt-dlp/releases/download/%s/%s",
-		ytDlpVersion, asset,
-	), nil
+	return "https://github.com/yt-dlp/yt-dlp/releases/latest/download/" + asset, nil
 }
 
 // setupProgress is emitted as "reclip:setup-progress" during downloads.

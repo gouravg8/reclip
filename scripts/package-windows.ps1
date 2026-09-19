@@ -14,7 +14,7 @@ $ErrorActionPreference = "Stop"
 
 $Root = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $Bin = Join-Path $Root "build\bin"
-$YtDlpVersion = "2025.01.01"
+$YtDlpUrl = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe"
 
 New-Item -ItemType Directory -Force -Path $Bin | Out-Null
 $tmp = New-Item -ItemType Directory -Force -Path (Join-Path $env:TEMP "reclip-sidecar")
@@ -43,7 +43,7 @@ if (-not (Test-Path (Join-Path $Bin "ffmpeg.exe"))) {
 
 # --- yt-dlp (only if missing; users can also fetch it one-click in Setup) ---
 if (-not (Test-Path (Join-Path $Bin "yt-dlp.exe"))) {
-  Get-File "https://github.com/yt-dlp/yt-dlp/releases/download/$YtDlpVersion/yt-dlp.exe" (Join-Path $Bin "yt-dlp.exe")
+  Get-File $YtDlpUrl (Join-Path $Bin "yt-dlp.exe")
 } else {
   Write-Host "yt-dlp.exe already in build\bin, skipping download."
 }

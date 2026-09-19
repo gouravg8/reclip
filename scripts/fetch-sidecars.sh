@@ -6,13 +6,11 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OS="${1:-all}"
 
-YTDLP_VER="2025.01.01"
-
 fetch_yt_dlp() {
   local dir="$1" asset="$2"
   mkdir -p "$dir"
   echo "-> yt-dlp $asset"
-  curl -fsSL -o "$dir/$asset" "https://github.com/yt-dlp/yt-dlp/releases/download/${YTDLP_VER}/${asset}"
+  curl -fsSL -o "$dir/$asset" "https://github.com/yt-dlp/yt-dlp/releases/latest/download/${asset}"
   chmod +x "$dir/$asset" || true
 }
 
@@ -24,8 +22,7 @@ fetch_linux() {
   tar -xf /tmp/ffmpeg-linux.tar.xz -C /tmp
   cp /tmp/ffmpeg-*-amd64-static/ffmpeg "$dir/"
   rm -rf /tmp/ffmpeg-*-amd64-static /tmp/ffmpeg-linux.tar.xz
-  fetch_yt_dlp "$dir" "yt-dlp_linux"
-  mv "$dir/yt-dlp_linux" "$dir/yt-dlp"
+  fetch_yt_dlp "$dir" "yt-dlp"
 }
 
 fetch_windows() {
