@@ -43,7 +43,7 @@ jobs:
       - name: Install NSIS (installer compiler)
         run: |
           choco install nsis -y --no-progress
-          "${env:ProgramFiles(x86)}\NSIS\makensis.exe" -VERSION
+          & "${env:ProgramFiles(x86)}\NSIS\makensis.exe" -VERSION
           echo "${env:ProgramFiles(x86)}\NSIS" | Out-File -Append -FilePath $env:GITHUB_PATH
 
       - name: Build installer (app + ffmpeg + yt-dlp)
