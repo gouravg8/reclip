@@ -477,7 +477,7 @@ export default function App() {
           borderRadius: 10,
           colorBgLayout: "#f4f6f9",
           fontFamily:
-            '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+            '"Inter Variable", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
         },
       }}
     >

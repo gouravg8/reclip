@@ -1,4 +1,9 @@
 @import "tailwindcss";
+@import "@fontsource-variable/inter";
+@import "@fontsource/open-runde/400.css";
+@import "@fontsource/open-runde/500.css";
+@import "@fontsource/open-runde/600.css";
+@import "@fontsource/open-runde/700.css";
 
 html {
   background-color: #f4f6f9;
@@ -9,7 +14,8 @@ body {
   margin: 0;
   color: #1a2333;
   font-family:
-    "Inter",
+    "Inter Variable",
+    Inter,
     -apple-system,
     BlinkMacSystemFont,
     "Segoe UI",
@@ -18,6 +24,23 @@ body {
     Arial,
     sans-serif;
   -webkit-font-smoothing: antialiased;
+  font-feature-settings: "cv11", "ss01";
+}
+
+/* Display headings like the reference (Open Runde). */
+h1,
+h2,
+h3,
+h4,
+.display {
+  font-family:
+    "Open Runde",
+    "Inter Variable",
+    Inter,
+    -apple-system,
+    "Segoe UI",
+    sans-serif;
+  letter-spacing: -0.02em;
 }
 
 #app {
