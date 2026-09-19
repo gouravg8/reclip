@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Button, Card, InputNumber, List, Slider, Space, Typography } from "antd";
+import { Button, Card, InputNumber, List, Slider, Space, Tag, Typography } from "antd";
 import { DeleteOutlined, PlayCircleOutlined, ReloadOutlined } from "@ant-design/icons";
 import {
   defaultEdit,
@@ -85,18 +85,14 @@ export default function Editor({ item, onChange }: Props) {
 
   return (
     <Card
-      title={`4 · Edit — ${item.name}`}
-      size="small"
-      extra={
-        <Typography.Text type="secondary">
-          output ≈ {formatDuration(outputDuration(duration, edit))}
-        </Typography.Text>
-      }
+      title={`Editing — ${item.name}`}
+      className="soft-card"
+      extra={<Tag color="#0284c7">output ≈ {formatDuration(outputDuration(duration, edit))}</Tag>}
     >
-      <div className="flex flex-col md:flex-row gap-4">
+      <div className="flex flex-col md:flex-row gap-5">
         {/* Phone-frame preview */}
         <div className="flex justify-center">
-          <div className="w-45 aspect-[9/16] max-h-105 bg-black rounded-lg overflow-hidden relative">
+          <div className="w-45 aspect-[9/16] max-h-105 bg-black rounded-2xl overflow-hidden relative shadow-[0_12px_32px_-12px_rgba(16,24,40,0.35)] ring-1 ring-black/10">
             <video
               key={`${item.id}-${item.path}`}
               ref={videoRef}

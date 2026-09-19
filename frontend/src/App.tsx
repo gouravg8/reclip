@@ -4,6 +4,7 @@ import {
   Button,
   Card,
   Checkbox,
+  ConfigProvider,
   Input,
   Layout,
   Select,
@@ -18,8 +19,9 @@ import {
   DownloadOutlined,
   ExportOutlined,
   FolderOpenOutlined,
+  QuestionCircleOutlined,
+  ScissorOutlined,
   UploadOutlined,
-  VideoCameraOutlined,
 } from "@ant-design/icons";
 import {
   CheckDeps,
@@ -48,6 +50,7 @@ import {
   type QueueItem,
 } from "./types";
 import Editor from "./Editor";
+import HelpModal from "./HelpModal";
 
 const OUTDIR_KEY = "reclip:outdir";
 const CREDIT_ALL_KEY = "reclip:creditAll";
@@ -77,6 +80,7 @@ export default function App() {
   const [addCreditAll, setAddCreditAll] = useState(true);
   const [batchBusy, setBatchBusy] = useState(false);
   const [exporting, setExporting] = useState<string[]>([]);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [notice, setNotice] = useState<{ type: "error" | "warning"; text: string } | null>(null);
 
   const activeId = useRef<string | null>(null);
@@ -447,282 +451,74 @@ export default function App() {
     (it) => it.source === "link" && (it.status === "queued" || it.status === "error"),
   ).length;
 
+  const engines: { key: string; label: string; ok: boolean; full: string }[] = deps
+    ? [
+        {
+          key: "ffmpeg",
+          label: "ffmpeg",
+          ok: !deps.ffmpeg.startsWith("missing"),
+          full: deps.ffmpeg,
+        },
+        {
+          key: "ffprobe",
+          label: "ffprobe",
+          ok: !deps.ffprobe.startsWith("missing"),
+          full: deps.ffprobe,
+        },
+        { key: "ytdlp", label: "yt-dlp", ok: !deps.ytDlp.startsWith("missing"), full: deps.ytDlp },
+      ]
+    : [];
+
   return (
-    <Layout className="min-h-screen">
-      <Layout.Header className="flex items-center gap-3">
-        <VideoCameraOutlined className="text-white text-xl" />
-        <Typography.Title level={4} className="!text-white !mb-0">
-          Reclip
-        </Typography.Title>
-        <Typography.Text type="secondary" className="!text-gray-400">
-          batch reel + credit exporter
-        </Typography.Text>
-      </Layout.Header>
-      <Layout.Content className="p-4 max-w-5xl w-full mx-auto flex flex-col gap-4">
-        {missingDeps.length > 0 && (
-          <Alert
-            type="error"
-            showIcon
-            message="Missing dependencies"
-            description={missingDeps.join(" · ")}
-          />
-        )}
-        {notice && (
-          <Alert
-            type={notice.type}
-            showIcon
-            closable
-            message={notice.text}
-            onClose={() => setNotice(null)}
-          />
-        )}
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Card title="1 · Add reels" size="small">
-            <Space direction="vertical" className="w-full">
-              <Space className="w-full" wrap>
-                <Button icon={<FolderOpenOutlined />} onClick={pickOutDir}>
-                  {outDir ? "Change folder" : "Download folder"}
-                </Button>
-                <Typography.Text type="secondary" ellipsis className="max-w-60">
-                  {outDir || "not set"}
+    <ConfigProvider
+      theme={{
+        token: {
+          colorPrimary: "#0284c7",
+          borderRadius: 10,
+          colorBgLayout: "#f4f6f9",
+          fontFamily:
+            '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+        },
+      }}
+    >
+      <Layout className="h-screen">
+        <Layout.Header className="!bg-white border-b border-[#e7eaf0] !h-14 flex items-center gap-3 px-5">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-[#0284c7] text-white flex items-center justify-center text-base font-bold shadow-[0_4px_12px_-2px_rgba(2,132,199,0.5)]">
+              R
+            </div>
+            <div>
+              <div className="font-bold text-[14px] leading-tight">Reclip</div>
+              <div className="text-[10px] text-[#8a94a6] leading-tight">reel republisher</div>
+            </div>
+          </div>
+          <div className="flex-1" />
+          <Space>
+            <Button
+              type="text"
+              icon={<QuestionCircleOutlined />}
+              title="How to use Reclip"
+              onClick={() => setHelpOpen(true)}
+            />
+            <span>
+              {engines.length === 0 && (
+                <Typography.Text type="secondary" className="text-xs mr-2">
+                  checking engines…
                 </Typography.Text>
-              </Space>
-              <Input.TextArea
-                rows={4}
-                placeholder={"Paste reel links, one per line\nhttps://www.instagram.com/reel/…"}
-                value={links}
-                onChange={(e) => setLinks(e.target.value)}
-              />
-              <Space wrap>
-                <Button
-                  type="primary"
-                  icon={<DownloadOutlined />}
-                  loading={busy}
-                  onClick={addLinks}
+              )}
+              {engines.map((e) => (
+                <span
+                  key={e.key}
+                  title={e.full}
+                  className="inline-flex items-center gap-1.5 text-xs text-[#3d4759] mr-3"
                 >
-                  Add & download
-                </Button>
-                <Button icon={<UploadOutlined />} onClick={addFiles}>
-                  Upload files
-                </Button>
-              </Space>
-            </Space>
-          </Card>
-
-          <Card
-            title="2 · Credit video (added once)"
-            size="small"
-            extra={
-              credit ? (
-                <Button size="small" danger onClick={clearCredit}>
-                  Clear
-                </Button>
-              ) : null
-            }
-          >
-            {credit ? (
-              <Space direction="vertical">
-                <Space>
-                  <CheckCircleOutlined className="text-green-600" />
-                  <Typography.Text ellipsis className="max-w-70" title={credit}>
-                    {basename(credit)}
-                  </Typography.Text>
-                </Space>
-                <Typography.Text type="secondary">
-                  {creditInfo
-                    ? `${formatDuration(creditInfo.duration)} · ${creditInfo.width}×${creditInfo.height} · ${formatBytes(creditInfo.sizeBytes)}`
-                    : "saved as default for all exports"}
-                </Typography.Text>
-                <Button size="small" onClick={pickCredit}>
-                  Replace
-                </Button>
-              </Space>
-            ) : (
-              <Space direction="vertical">
-                <Typography.Text type="secondary">
-                  Your 10s company clip. Saved as default, auto-appended on export.
-                </Typography.Text>
-                <Button icon={<UploadOutlined />} onClick={pickCredit}>
-                  Select credit video
-                </Button>
-              </Space>
-            )}
-          </Card>
-        </div>
-
-        <Card
-          title={`3 · Queue (${readyCount}/${items.length} ready)`}
-          size="small"
-          extra={
-            <Space>
-              <Button size="small" onClick={retryStuck} disabled={stuckCount === 0}>
-                Retry queued ({stuckCount})
-              </Button>
-              <Button size="small" onClick={clearFinished} disabled={items.length === 0}>
-                Clear finished
-              </Button>
-            </Space>
-          }
-        >
-          <Table<QueueItem>
-            size="small"
-            rowKey="id"
-            pagination={false}
-            dataSource={items}
-            locale={{ emptyText: "Paste links or upload files to begin" }}
-            rowSelection={{
-              type: "radio",
-              selectedRowKeys: selectedId ? [selectedId] : [],
-              onChange: (keys) => setSelectedId((keys[0] as string) ?? null),
-            }}
-            onRow={(it) => ({ onClick: () => setSelectedId(it.id) })}
-            columns={[
-              {
-                title: "Video",
-                dataIndex: "name",
-                ellipsis: true,
-                render: (_, it) => (
-                  <Space direction="vertical" size={0}>
-                    <Typography.Text strong ellipsis title={it.path || it.url}>
-                      {it.name}
-                    </Typography.Text>
-                    {it.source === "link" && it.path ? (
-                      <Typography.Text type="secondary" ellipsis className="text-xs max-w-80">
-                        {it.url}
-                      </Typography.Text>
-                    ) : null}
-                  </Space>
-                ),
-              },
-              {
-                title: "Src",
-                width: 70,
-                render: (_, it) => <Tag>{it.source}</Tag>,
-              },
-              {
-                title: "Status",
-                width: 130,
-                render: (_, it) => <Tag color={statusColor[it.status]}>{it.status}</Tag>,
-              },
-              {
-                title: "Detail",
-                ellipsis: true,
-                render: (_, it) => {
-                  if (it.status === "error")
-                    return <Typography.Text type="danger">{it.error}</Typography.Text>;
-                  if (it.status === "downloading")
-                    return <Typography.Text type="secondary">{it.progress ?? "…"}</Typography.Text>;
-                  if (it.status === "ready" && it.info)
-                    return (
-                      <Typography.Text type="secondary">
-                        {formatDuration(it.info.duration)} · {it.info.width}×{it.info.height} ·{" "}
-                        {formatBytes(it.info.sizeBytes)}
-                      </Typography.Text>
-                    );
-                  return <Typography.Text type="secondary">…</Typography.Text>;
-                },
-              },
-              {
-                title: "Credit",
-                width: 150,
-                render: (_, it) => (
-                  <Space direction="vertical" size={2} className="w-full">
-                    <Select<CreditMode>
-                      size="small"
-                      className="w-full"
-                      value={it.credit}
-                      onClick={(e) => e.stopPropagation()}
-                      onChange={(v) => setCreditMode(it.id, v)}
-                      options={[
-                        {
-                          value: "inherit",
-                          label: addCreditAll ? "Default (on)" : "Default (off)",
-                        },
-                        { value: "none", label: "None" },
-                        { value: "custom", label: "Custom…" },
-                      ]}
-                    />
-                    {it.credit === "custom" && (
-                      <Button
-                        size="small"
-                        type="link"
-                        className="!p-0 text-xs"
-                        onClick={async (e) => {
-                          e.stopPropagation();
-                          const f = await pickCustomCredit();
-                          if (f) patchItem(it.id, { customCredit: f });
-                        }}
-                      >
-                        {it.customCredit ? basename(it.customCredit) : "pick file…"}
-                      </Button>
-                    )}
-                  </Space>
-                ),
-              },
-              {
-                title: "Export",
-                ellipsis: true,
-                render: (_, it) => {
-                  const xs = it.exportState;
-                  if (it.status !== "ready")
-                    return <Typography.Text type="secondary">…</Typography.Text>;
-                  if (xs?.phase === "done" && xs.outPath)
-                    return (
-                      <Typography.Text type="success" ellipsis title={xs.outPath}>
-                        ✓ {basename(xs.outPath)}
-                      </Typography.Text>
-                    );
-                  if (xs && xs.phase !== "error" && (exporting.includes(it.id) || batchBusy))
-                    return (
-                      <Typography.Text type="secondary">
-                        {xs.phase} {Math.round(xs.frac * 100)}%
-                      </Typography.Text>
-                    );
-                  if (xs?.phase === "error")
-                    return <Typography.Text type="danger">{xs.error}</Typography.Text>;
-                  return <Typography.Text type="secondary">ready</Typography.Text>;
-                },
-              },
-              {
-                title: "",
-                width: 90,
-                render: (_, it) => (
-                  <Space size={0}>
-                    {it.status === "ready" && (
-                      <Button
-                        size="small"
-                        type="text"
-                        icon={<ExportOutlined />}
-                        title="Export this video"
-                        loading={exporting.includes(it.id)}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          void exportOneItem(it.id);
-                        }}
-                      />
-                    )}
-                    <Button
-                      size="small"
-                      danger
-                      type="text"
-                      icon={<DeleteOutlined />}
-                      onClick={() => removeItem(it.id)}
-                    />
-                  </Space>
-                ),
-              },
-            ]}
-          />
-        </Card>
-
-        <Card
-          title={`5 · Export all (1080×1920 + credit)`}
-          size="small"
-          extra={
+                  <span className={`dot ${e.ok ? "ok" : "bad"}`} />
+                  {e.label}
+                </span>
+              ))}
+            </span>
             <Button
               type="primary"
-              size="small"
               icon={<ExportOutlined />}
               loading={batchBusy}
               disabled={readyCount === 0}
@@ -730,32 +526,402 @@ export default function App() {
             >
               Export all ({readyCount})
             </Button>
-          }
-        >
-          <Space direction="vertical" className="w-full">
-            <Checkbox checked={addCreditAll} onChange={(e) => toggleCreditAll(e.target.checked)}>
-              Add credit video to all exports
-            </Checkbox>
-            <Typography.Text type="secondary" className="text-xs">
-              {credit
-                ? `Default credit: ${basename(credit)}. Per-video override in the Credit column. Files land in the download folder as <name>_reclip.mp4.`
-                : "No default credit set — add one in section 2, or pick per-video Custom files."}
-            </Typography.Text>
           </Space>
-        </Card>
+        </Layout.Header>
 
-        {selectedReady ? (
-          <Editor item={selectedReady} onChange={(edit) => changeEdit(selectedReady.id, edit)} />
-        ) : (
-          selected && (
-            <Card size="small">
-              <Typography.Text type="secondary">
-                Select a ready video to edit (this one is {selected.status}).
-              </Typography.Text>
-            </Card>
-          )
-        )}
-      </Layout.Content>
-    </Layout>
+        <Layout className="aurora overflow-y-auto">
+          <Layout.Content className="p-6 max-w-6xl w-full mx-auto flex flex-col gap-5">
+            <div className="flex items-end justify-between flex-wrap gap-3">
+              <div>
+                <div className="eyebrow">Reclip studio</div>
+                <Typography.Title level={2} className="!mb-1 !mt-1 !text-[26px]">
+                  Republish reels in minutes
+                </Typography.Title>
+                <Typography.Text type="secondary">
+                  Paste links → polish each clip → append your credit → ship. Everything renders on
+                  this machine.
+                </Typography.Text>
+              </div>
+              <Space>
+                <Button icon={<FolderOpenOutlined />} onClick={pickOutDir}>
+                  {outDir ? basename(outDir) : "Choose folder"}
+                </Button>
+              </Space>
+            </div>
+
+            {missingDeps.length > 0 && (
+              <Alert
+                type="error"
+                showIcon
+                message="Missing dependencies"
+                description={missingDeps.join(" · ")}
+              />
+            )}
+            {notice && (
+              <Alert
+                type={notice.type}
+                showIcon
+                closable
+                message={notice.text}
+                onClose={() => setNotice(null)}
+              />
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div>
+                <div className="eyebrow pb-2">01 · Source</div>
+                <Card title="Add reels" className="soft-card">
+                  <Space direction="vertical" className="w-full" size="middle">
+                    <div>
+                      <Typography.Text strong className="text-[13px]">
+                        Download folder
+                      </Typography.Text>
+                      <Space className="w-full pt-1" wrap>
+                        <Button icon={<FolderOpenOutlined />} onClick={pickOutDir}>
+                          {outDir ? "Change folder" : "Choose folder"}
+                        </Button>
+                        <Typography.Text type="secondary" ellipsis className="max-w-60">
+                          {outDir || "not set"}
+                        </Typography.Text>
+                      </Space>
+                      <Typography.Text type="secondary" className="text-xs">
+                        Pasted links download here. Finished exports land here too as
+                        {" <name>_reclip.mp4"}.
+                      </Typography.Text>
+                    </div>
+                    <div>
+                      <Typography.Text strong className="text-[13px]">
+                        Reel links — one per line
+                      </Typography.Text>
+                      <Input.TextArea
+                        rows={4}
+                        className="mt-1"
+                        placeholder={
+                          "Paste reel links, one per line\nhttps://www.instagram.com/reel/…"
+                        }
+                        value={links}
+                        onChange={(e) => setLinks(e.target.value)}
+                      />
+                      <Typography.Text type="secondary" className="text-xs">
+                        Each link downloads automatically and joins the queue below.
+                      </Typography.Text>
+                    </div>
+                    <div>
+                      <Space wrap>
+                        <Button
+                          type="primary"
+                          icon={<DownloadOutlined />}
+                          loading={busy}
+                          onClick={addLinks}
+                        >
+                          Add & download
+                        </Button>
+                        <Button
+                          icon={<UploadOutlined />}
+                          onClick={addFiles}
+                          title="Add video files already on your PC — no link needed"
+                        >
+                          Upload files
+                        </Button>
+                      </Space>
+                      <Typography.Text type="secondary" className="block text-xs pt-1">
+                        Already have the MP4 on your PC? Upload it straight to the queue.
+                      </Typography.Text>
+                    </div>
+                  </Space>
+                </Card>
+              </div>
+
+              <div>
+                <div className="eyebrow pb-2">02 · Branding</div>
+                <Card
+                  title="Credit clip — added once"
+                  className="soft-card"
+                  extra={
+                    credit ? (
+                      <Button size="small" danger onClick={clearCredit}>
+                        Clear
+                      </Button>
+                    ) : null
+                  }
+                >
+                  {credit ? (
+                    <Space direction="vertical">
+                      <Space>
+                        <CheckCircleOutlined className="text-green-600" />
+                        <Typography.Text ellipsis className="max-w-70" title={credit}>
+                          {basename(credit)}
+                        </Typography.Text>
+                      </Space>
+                      <Typography.Text type="secondary">
+                        {creditInfo
+                          ? `${formatDuration(creditInfo.duration)} · ${creditInfo.width}×${creditInfo.height} · ${formatBytes(creditInfo.sizeBytes)}`
+                          : "saved as default for all exports"}
+                      </Typography.Text>
+                      <Button size="small" onClick={pickCredit}>
+                        Replace
+                      </Button>
+                    </Space>
+                  ) : (
+                    <Space direction="vertical">
+                      <Typography.Text type="secondary">
+                        Your 10s company clip. Saved as default, auto-appended on export.
+                      </Typography.Text>
+                      <Button icon={<UploadOutlined />} onClick={pickCredit}>
+                        Select credit video
+                      </Button>
+                    </Space>
+                  )}
+                </Card>
+              </div>
+            </div>
+
+            <div>
+              <div className="eyebrow pb-2">03 · Lineup</div>
+              <Card
+                title={`Queue — ${readyCount} of ${items.length} ready`}
+                className="soft-card"
+                extra={
+                  <Space>
+                    <Button size="small" onClick={retryStuck} disabled={stuckCount === 0}>
+                      Retry queued ({stuckCount})
+                    </Button>
+                    <Button size="small" onClick={clearFinished} disabled={items.length === 0}>
+                      Clear finished
+                    </Button>
+                  </Space>
+                }
+              >
+                <Table<QueueItem>
+                  size="middle"
+                  rowKey="id"
+                  pagination={false}
+                  dataSource={items}
+                  locale={{
+                    emptyText: (
+                      <div className="py-8 flex flex-col items-center gap-2">
+                        <div className="w-11 h-11 rounded-2xl bg-[#f0f9ff] text-[#0284c7] flex items-center justify-center text-xl">
+                          <DownloadOutlined />
+                        </div>
+                        <Typography.Text strong>Nothing here yet</Typography.Text>
+                        <Typography.Text type="secondary" className="text-xs">
+                          Paste reel links above or upload files to start your lineup.
+                        </Typography.Text>
+                      </div>
+                    ),
+                  }}
+                  rowSelection={{
+                    type: "radio",
+                    selectedRowKeys: selectedId ? [selectedId] : [],
+                    onChange: (keys) => setSelectedId((keys[0] as string) ?? null),
+                  }}
+                  onRow={(it) => ({ onClick: () => setSelectedId(it.id) })}
+                  columns={[
+                    {
+                      title: "Video",
+                      dataIndex: "name",
+                      ellipsis: true,
+                      render: (_, it) => (
+                        <Space direction="vertical" size={0}>
+                          <Typography.Text strong ellipsis title={it.path || it.url}>
+                            {it.name}
+                          </Typography.Text>
+                          {it.source === "link" && it.path ? (
+                            <Typography.Text type="secondary" ellipsis className="text-xs max-w-80">
+                              {it.url}
+                            </Typography.Text>
+                          ) : null}
+                        </Space>
+                      ),
+                    },
+                    {
+                      title: "Src",
+                      width: 70,
+                      render: (_, it) => <Tag>{it.source}</Tag>,
+                    },
+                    {
+                      title: "Status",
+                      width: 130,
+                      render: (_, it) => <Tag color={statusColor[it.status]}>{it.status}</Tag>,
+                    },
+                    {
+                      title: "Detail",
+                      ellipsis: true,
+                      render: (_, it) => {
+                        if (it.status === "error")
+                          return <Typography.Text type="danger">{it.error}</Typography.Text>;
+                        if (it.status === "downloading")
+                          return (
+                            <Typography.Text type="secondary">{it.progress ?? "…"}</Typography.Text>
+                          );
+                        if (it.status === "ready" && it.info)
+                          return (
+                            <Typography.Text type="secondary">
+                              {formatDuration(it.info.duration)} · {it.info.width}×{it.info.height}{" "}
+                              · {formatBytes(it.info.sizeBytes)}
+                            </Typography.Text>
+                          );
+                        return <Typography.Text type="secondary">…</Typography.Text>;
+                      },
+                    },
+                    {
+                      title: "Credit",
+                      width: 150,
+                      render: (_, it) => (
+                        <Space direction="vertical" size={2} className="w-full">
+                          <Select<CreditMode>
+                            size="small"
+                            className="w-full"
+                            value={it.credit}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(v) => setCreditMode(it.id, v)}
+                            options={[
+                              {
+                                value: "inherit",
+                                label: addCreditAll ? "Default (on)" : "Default (off)",
+                              },
+                              { value: "none", label: "None" },
+                              { value: "custom", label: "Custom…" },
+                            ]}
+                          />
+                          {it.credit === "custom" && (
+                            <Button
+                              size="small"
+                              type="link"
+                              className="!p-0 text-xs"
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                const f = await pickCustomCredit();
+                                if (f) patchItem(it.id, { customCredit: f });
+                              }}
+                            >
+                              {it.customCredit ? basename(it.customCredit) : "pick file…"}
+                            </Button>
+                          )}
+                        </Space>
+                      ),
+                    },
+                    {
+                      title: "Export",
+                      ellipsis: true,
+                      render: (_, it) => {
+                        const xs = it.exportState;
+                        if (it.status !== "ready")
+                          return <Typography.Text type="secondary">…</Typography.Text>;
+                        if (xs?.phase === "done" && xs.outPath)
+                          return (
+                            <Typography.Text type="success" ellipsis title={xs.outPath}>
+                              ✓ {basename(xs.outPath)}
+                            </Typography.Text>
+                          );
+                        if (xs && xs.phase !== "error" && (exporting.includes(it.id) || batchBusy))
+                          return (
+                            <Typography.Text type="secondary">
+                              {xs.phase} {Math.round(xs.frac * 100)}%
+                            </Typography.Text>
+                          );
+                        if (xs?.phase === "error")
+                          return <Typography.Text type="danger">{xs.error}</Typography.Text>;
+                        return <Typography.Text type="secondary">ready</Typography.Text>;
+                      },
+                    },
+                    {
+                      title: "",
+                      width: 90,
+                      render: (_, it) => (
+                        <Space size={0}>
+                          {it.status === "ready" && (
+                            <Button
+                              size="small"
+                              type="text"
+                              icon={<ExportOutlined />}
+                              title="Export this video"
+                              loading={exporting.includes(it.id)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void exportOneItem(it.id);
+                              }}
+                            />
+                          )}
+                          <Button
+                            size="small"
+                            danger
+                            type="text"
+                            icon={<DeleteOutlined />}
+                            onClick={() => removeItem(it.id)}
+                          />
+                        </Space>
+                      ),
+                    },
+                  ]}
+                />
+              </Card>
+            </div>
+
+            <div>
+              <div className="eyebrow pb-2">04 · Polish</div>
+              {selectedReady ? (
+                <Editor
+                  item={selectedReady}
+                  onChange={(edit) => changeEdit(selectedReady.id, edit)}
+                />
+              ) : (
+                <Card className="soft-card">
+                  <div className="py-6 flex flex-col items-center gap-2">
+                    <div className="w-11 h-11 rounded-2xl bg-[#f0f9ff] text-[#0284c7] flex items-center justify-center text-xl">
+                      <ScissorOutlined />
+                    </div>
+                    <Typography.Text strong>
+                      {selected
+                        ? `“${selected.name}” isn’t ready yet (${selected.status})`
+                        : "Select a ready video to edit"}
+                    </Typography.Text>
+                    <Typography.Text type="secondary" className="text-xs">
+                      Trim, cut sections, and zoom away usernames — click any ready row in the
+                      queue.
+                    </Typography.Text>
+                  </div>
+                </Card>
+              )}
+            </div>
+
+            <div>
+              <div className="eyebrow pb-2">05 · Ship</div>
+              <Card
+                title="Export all — 1080×1920 + credit"
+                className="soft-card"
+                extra={
+                  <Button
+                    type="primary"
+                    size="small"
+                    icon={<ExportOutlined />}
+                    loading={batchBusy}
+                    disabled={readyCount === 0}
+                    onClick={() => void exportAllReady()}
+                  >
+                    Export all ({readyCount})
+                  </Button>
+                }
+              >
+                <Space direction="vertical" className="w-full">
+                  <Checkbox
+                    checked={addCreditAll}
+                    onChange={(e) => toggleCreditAll(e.target.checked)}
+                  >
+                    Add credit video to all exports
+                  </Checkbox>
+                  <Typography.Text type="secondary" className="text-xs">
+                    {credit
+                      ? `Default credit: ${basename(credit)}. Per-video override in the Credit column. Files land in the download folder as <name>_reclip.mp4.`
+                      : "No default credit set — add one in section 2, or pick per-video Custom files."}
+                  </Typography.Text>
+                </Space>
+              </Card>
+            </div>
+          </Layout.Content>
+        </Layout>
+      </Layout>
+      <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
+    </ConfigProvider>
   );
 }

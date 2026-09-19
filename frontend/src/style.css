@@ -1,39 +1,78 @@
 @import "tailwindcss";
 
 html {
-  background-color: rgba(27, 38, 54, 1);
-  text-align: center;
-  color: white;
+  background-color: #f4f6f9;
+  color: #1a2333;
 }
 
 body {
   margin: 0;
-  color: white;
+  color: #1a2333;
   font-family:
-    "Nunito",
+    "Inter",
     -apple-system,
     BlinkMacSystemFont,
     "Segoe UI",
     "Roboto",
-    "Oxygen",
-    "Ubuntu",
-    "Cantarell",
-    "Fira Sans",
-    "Droid Sans",
     "Helvetica Neue",
+    Arial,
     sans-serif;
-}
-
-@font-face {
-  font-family: "Nunito";
-  font-style: normal;
-  font-weight: 400;
-  src:
-    local(""),
-    url("assets/fonts/nunito-v16-latin-regular.woff2") format("woff2");
+  -webkit-font-smoothing: antialiased;
 }
 
 #app {
   height: 100vh;
-  text-align: center;
+}
+
+/* Sky/azure wash behind the content. Pure CSS. */
+.aurora {
+  background:
+    radial-gradient(600px 220px at 12% -60px, rgba(2, 132, 199, 0.14), transparent 70%),
+    radial-gradient(700px 260px at 88% -80px, rgba(165, 243, 252, 0.5), transparent 70%),
+    radial-gradient(500px 200px at 50% -100px, rgba(14, 165, 233, 0.1), transparent 70%), #f4f6f9;
+}
+
+/* Small-caps section eyebrow, like the reference site labels. */
+.eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #8a94a6;
+}
+
+/* Soft SaaS card: white, light border, gentle shadow. */
+.soft-card {
+  border: 1px solid #e7eaf0 !important;
+  border-radius: 14px !important;
+  box-shadow:
+    0 1px 2px rgba(16, 24, 40, 0.04),
+    0 8px 24px -12px rgba(16, 24, 40, 0.12) !important;
+}
+
+/* Status dot. */
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  display: inline-block;
+}
+.dot.ok {
+  background: #16a34a;
+}
+.dot.bad {
+  background: #dc2626;
+}
+.dot.idle {
+  background: #c3cad4;
+}
+
+/* Thin scrollbars for panels. */
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: #d4dae3;
+  border-radius: 8px;
 }
