@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Fetch static ffmpeg/ffprobe + yt-dlp binaries into sidecar/<os>/.
+# Fetch static ffmpeg + yt-dlp binaries into sidecar/<os>/.
 # Usage: bash scripts/fetch-sidecars.sh [windows|linux|darwin|all]
 set -euo pipefail
 
@@ -22,7 +22,7 @@ fetch_linux() {
   echo "-> ffmpeg static (johnvansickle)"
   curl -fsSL -o /tmp/ffmpeg-linux.tar.xz "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz"
   tar -xf /tmp/ffmpeg-linux.tar.xz -C /tmp
-  cp /tmp/ffmpeg-*-amd64-static/ffmpeg /tmp/ffmpeg-*-amd64-static/ffprobe "$dir/"
+  cp /tmp/ffmpeg-*-amd64-static/ffmpeg "$dir/"
   rm -rf /tmp/ffmpeg-*-amd64-static /tmp/ffmpeg-linux.tar.xz
   fetch_yt_dlp "$dir" "yt-dlp_linux"
   mv "$dir/yt-dlp_linux" "$dir/yt-dlp"
@@ -35,8 +35,7 @@ fetch_windows() {
   curl -fsSL -o /tmp/ffmpeg-win.zip "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
   rm -rf /tmp/ffmpeg-win && mkdir -p /tmp/ffmpeg-win
   unzip -q -o /tmp/ffmpeg-win.zip -d /tmp/ffmpeg-win
-  cp /tmp/ffmpeg-win/ffmpeg-*-essentials_build/bin/ffmpeg.exe \
-     /tmp/ffmpeg-win/ffmpeg-*-essentials_build/bin/ffprobe.exe "$dir/"
+  cp /tmp/ffmpeg-win/ffmpeg-*-essentials_build/bin/ffmpeg.exe "$dir/"
   rm -rf /tmp/ffmpeg-win /tmp/ffmpeg-win.zip
   fetch_yt_dlp "$dir" "yt-dlp.exe"
 }
@@ -50,8 +49,6 @@ fetch_darwin() {
   unzip -q -o -j /tmp/ffmpeg-mac.zip -d /tmp/ffmpeg-mac
   cp /tmp/ffmpeg-mac/ffmpeg "$dir/"
   rm -rf /tmp/ffmpeg-mac /tmp/ffmpeg-mac.zip
-  echo "NOTE: evermeet ships ffmpeg only; install ffprobe via 'brew install ffmpeg'"
-  echo "and copy it to $dir/ffprobe, or rely on PATH resolution."
   fetch_yt_dlp "$dir" "yt-dlp_macos"
   mv "$dir/yt-dlp_macos" "$dir/yt-dlp"
 }

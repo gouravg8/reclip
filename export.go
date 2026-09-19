@@ -165,16 +165,16 @@ func buildFilter(w, h int, e ExportEdit) string {
 
 // hasAudioStream reports whether path contains an audio stream.
 func hasAudioStream(path string) bool {
-	bin, err := ffprobeBin()
+	bin, err := ffmpegBin()
 	if err != nil {
 		return false
 	}
-	out, err := exec.Command(bin, "-v", "error", "-show_streams",
-		"-select_streams", "a:0", "-of", "csv=p=0", path).Output()
+	out, _ := exec.Command(bin, "-hide_banner", "-i", path).CombinedOutput()
+	parsed, err := parseFfmpegInfo(string(out))
 	if err != nil {
 		return false
 	}
-	return len(strings.TrimSpace(string(out))) > 0
+	return parsed.hasAudio
 }
 
 func ff3(f float64) string {

@@ -2,11 +2,11 @@ package main
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -26,15 +26,15 @@ type VideoInfo struct {
 
 // Deps reports the availability of external binaries.
 type Deps struct {
-	Ffmpeg  string `json:"ffmpeg"`
-	Ffprobe string `json:"ffprobe"`
-	YtDlp   string `json:"ytDlp"`
+	Ffmpeg string `json:"ffmpeg"`
+	YtDlp  string `json:"ytDlp"`
 }
 
 // resolveBin finds an external binary. Order:
 // 1. env override (e.g. RECLIP_FFMPEG)
-// 2. next to the app executable (bundled sidecar for packaged builds)
-// 3. system PATH.
+// 2. path saved in the app config (Setup screen)
+// 3. next to the app executable (bundled sidecar for packaged builds)
+// 4. system PATH.
 func resolveBin(envKey string, names ...string) (string, error) {
 	if v := strings.TrimSpace(os.Getenv(envKey)); v != "" {
 		if _, err := os.Stat(v); err == nil {
@@ -44,6 +44,22 @@ func resolveBin(envKey string, names ...string) (string, error) {
 			return p, nil
 		}
 		return "", fmt.Errorf("%s not found at %q", names[0], v)
+	}
+	if tool, ok := strings.CutPrefix(envKey, "RECLIP_"); ok {
+		if saved := configEngine(strings.ToLower(tool)); saved != "" {
+			if _, err := os.Stat(saved); err == nil {
+				return saved, nil
+			}
+		}
+	}
+	// Binaries fetched via Setup live in <config>/bin.
+	if dir, err := configDir(); err == nil {
+		for _, n := range names {
+			candidate := filepath.Join(dir, "bin", n)
+			if _, err := os.Stat(candidate); err == nil {
+				return candidate, nil
+			}
+		}
 	}
 	if exe, err := os.Executable(); err == nil {
 		dir := filepath.Dir(exe)
@@ -66,10 +82,6 @@ func ffmpegBin() (string, error) {
 	return resolveBin("RECLIP_FFMPEG", "ffmpeg", "ffmpeg.exe")
 }
 
-func ffprobeBin() (string, error) {
-	return resolveBin("RECLIP_FFPROBE", "ffprobe", "ffprobe.exe")
-}
-
 func ytDlpBin() (string, error) {
 	return resolveBin("RECLIP_YTDLP", "yt-dlp", "yt-dlp.exe")
 }
@@ -83,13 +95,12 @@ func (a *App) emit(event string, data ...interface{}) {
 	runtime.EventsEmit(a.ctx, event, data...)
 }
 
-// CheckDeps returns version strings (or missing markers) for ffmpeg,
-// ffprobe and yt-dlp so the UI can warn early.
+// CheckDeps returns version strings (or missing markers) for ffmpeg
+// and yt-dlp so the UI can warn early.
 func (a *App) CheckDeps() Deps {
 	return Deps{
-		Ffmpeg:  binVersion("RECLIP_FFMPEG", []string{"ffmpeg"}, "-version"),
-		Ffprobe: binVersion("RECLIP_FFPROBE", []string{"ffprobe"}, "-version"),
-		YtDlp:   binVersion("RECLIP_YTDLP", []string{"yt-dlp"}, "--version"),
+		Ffmpeg: binVersion("RECLIP_FFMPEG", []string{"ffmpeg"}, "-version"),
+		YtDlp:  binVersion("RECLIP_YTDLP", []string{"yt-dlp"}, "--version"),
 	}
 }
 
@@ -106,6 +117,57 @@ func binVersion(envKey string, names []string, versionArg string) string {
 	return strings.TrimSpace(first)
 }
 
+// streamInfo is the parsed result of `ffmpeg -i` (stderr).
+type streamInfo struct {
+	duration float64
+	width    int
+	height   int
+	fps      float64
+	hasAudio bool
+}
+
+var (
+	durationRe = regexp.MustCompile(`Duration:\s*(\d+):(\d+):([\d.]+)`)
+	dimsRe     = regexp.MustCompile(`\b(\d{2,5})x(\d{2,5})\b`)
+	fpsRe      = regexp.MustCompile(`\b([\d.]+)\s+fps\b`)
+)
+
+// parseFfmpegInfo extracts duration, dimensions, fps and audio presence
+// from `ffmpeg -i` stderr. `ffmpeg -i` exits nonzero (no output file), so
+// callers must ignore the exit code and rely on parsed streams.
+func parseFfmpegInfo(stderr string) (streamInfo, error) {
+	var info streamInfo
+	if m := durationRe.FindStringSubmatch(stderr); m != nil {
+		h, _ := strconv.ParseFloat(m[1], 64)
+		min, _ := strconv.ParseFloat(m[2], 64)
+		sec, _ := strconv.ParseFloat(m[3], 64)
+		info.duration = h*3600 + min*60 + sec
+	}
+	for _, line := range strings.Split(stderr, "\n") {
+		if !strings.Contains(line, "Stream #") {
+			continue
+		}
+		if strings.Contains(line, ": Video:") && info.width == 0 {
+			if m := dimsRe.FindStringSubmatch(line); m != nil {
+				w, _ := strconv.Atoi(m[1])
+				h, _ := strconv.Atoi(m[2])
+				info.width, info.height = w, h
+			}
+			if m := fpsRe.FindStringSubmatch(line); m != nil {
+				f, _ := strconv.ParseFloat(m[1], 64)
+				info.fps = f
+			}
+		}
+		if strings.Contains(line, ": Audio:") {
+			info.hasAudio = true
+		}
+	}
+	if info.width == 0 || info.height == 0 {
+		return info, fmt.Errorf("no video stream found")
+	}
+	return info, nil
+}
+
 // ProbeVideo returns duration, dimensions, fps and size for a media file.
 func (a *App) ProbeVideo(path string) (VideoInfo, error) {
 	info := VideoInfo{Path: path}
@@ -115,73 +177,23 @@ func (a *App) ProbeVideo(path string) (VideoInfo, error) {
 	}
 	info.SizeBytes = st.Size()
 
-	bin, err := ffprobeBin()
+	bin, err := ffmpegBin()
 	if err != nil {
 		return info, err
 	}
-	out, err := exec.Command(bin,
-		"-v", "error",
-		"-print_format", "json",
-		"-show_format",
-		"-show_streams",
-		path,
-	).Output()
+	// `ffmpeg -i` prints input info to stderr and exits 1 (no output);
+	// the exit code is expected — parse the output instead.
+	out, _ := exec.Command(bin, "-hide_banner", "-i", path).CombinedOutput()
+	parsed, err := parseFfmpegInfo(string(out))
 	if err != nil {
-		return info, fmt.Errorf("ffprobe failed: %w", err)
+		return info, fmt.Errorf("probe %q: %w", path, err)
 	}
-	var probed struct {
-		Streams []struct {
-			CodecType    string `json:"codec_type"`
-			Width        int    `json:"width"`
-			Height       int    `json:"height"`
-			AvgFrameRate string `json:"avg_frame_rate"`
-			Duration     string `json:"duration"`
-		} `json:"streams"`
-		Format struct {
-			Duration string `json:"duration"`
-			Size     string `json:"size"`
-		} `json:"format"`
-	}
-	if err := json.Unmarshal(out, &probed); err != nil {
-		return info, fmt.Errorf("parse ffprobe output: %w", err)
-	}
-	for _, s := range probed.Streams {
-		if s.CodecType == "audio" {
-			info.HasAudio = true
-			continue
-		}
-		if s.CodecType == "video" && info.Width == 0 {
-			info.Width = s.Width
-			info.Height = s.Height
-			info.FPS = parseFPS(s.AvgFrameRate)
-			if d, err := strconv.ParseFloat(s.Duration, 64); err == nil && d > 0 {
-				info.Duration = d
-			}
-		}
-	}
-	if info.Duration == 0 {
-		if d, err := strconv.ParseFloat(probed.Format.Duration, 64); err == nil {
-			info.Duration = d
-		}
-	}
-	if info.Width == 0 || info.Height == 0 {
-		return info, fmt.Errorf("no video stream found in %q", path)
-	}
+	info.Duration = parsed.duration
+	info.Width = parsed.width
+	info.Height = parsed.height
+	info.FPS = parsed.fps
+	info.HasAudio = parsed.hasAudio
 	return info, nil
-}
-
-func parseFPS(s string) float64 {
-	num, den, ok := strings.Cut(s, "/")
-	if !ok {
-		f, _ := strconv.ParseFloat(s, 64)
-		return f
-	}
-	n, err1 := strconv.ParseFloat(num, 64)
-	d, err2 := strconv.ParseFloat(den, 64)
-	if err1 != nil || err2 != nil || d == 0 {
-		return 0
-	}
-	return n / d
 }
 
 // DownloadReel downloads a single Instagram reel (or any yt-dlp-supported
@@ -276,6 +288,21 @@ func (a *App) SelectCreditFile() (string, error) {
 		Title: "Select credit video",
 		Filters: []runtime.FileFilter{
 			{DisplayName: "Videos (*.mp4, *.mov, *.mkv, *.webm)", Pattern: "*.mp4;*.mov;*.mkv;*.webm"},
+		},
+	})
+}
+
+// SelectEngineBinary opens a file dialog for picking an engine executable
+// (ffmpeg / yt-dlp).
+func (a *App) SelectEngineBinary() (string, error) {
+	if a.ctx == nil {
+		return "", fmt.Errorf("dialogs unavailable (no app context)")
+	}
+	return runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+		Title: "Locate program file",
+		Filters: []runtime.FileFilter{
+			{DisplayName: "Executables (*.exe)", Pattern: "*.exe"},
+			{DisplayName: "All files (*.*)", Pattern: "*.*"},
 		},
 	})
 }

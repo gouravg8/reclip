@@ -54,6 +54,7 @@ import {
 } from "./types";
 import Editor from "./Editor";
 import HelpModal from "./HelpModal";
+import SetupModal from "./SetupModal";
 
 const OUTDIR_KEY = "reclip:outdir";
 const CREDIT_ALL_KEY = "reclip:creditAll";
@@ -84,6 +85,7 @@ export default function App() {
   const [batchBusy, setBatchBusy] = useState(false);
   const [exporting, setExporting] = useState<string[]>([]);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [setupOpen, setSetupOpen] = useState(false);
   const [isDark, setIsDark] = useState(() => localStorage.getItem("reclip:theme") === "dark");
 
   useEffect(() => {
@@ -140,10 +142,13 @@ export default function App() {
   }, []);
 
   // Initial load: deps, saved credit, saved output dir.
-  useEffect(() => {
+  const refreshDeps = useCallback(() => {
     CheckDeps()
       .then(setDeps)
       .catch(() => setDeps(null));
+  }, []);
+  useEffect(() => {
+    refreshDeps();
     GetCreditPreset()
       .then(async (p) => {
         if (!p) return;
@@ -157,11 +162,9 @@ export default function App() {
       .catch(() => {});
     setOutDir(localStorage.getItem(OUTDIR_KEY) ?? "");
     setAddCreditAll(localStorage.getItem(CREDIT_ALL_KEY) !== "0");
-  }, []);
+  }, [refreshDeps]);
 
-  const missingDeps = deps
-    ? [deps.ffmpeg, deps.ffprobe, deps.ytDlp].filter((v) => v.startsWith("missing"))
-    : [];
+  const missingDeps = deps ? [deps.ffmpeg, deps.ytDlp].filter((v) => v.startsWith("missing")) : [];
 
   const probeAndReady = useCallback(
     async (id: string, path: string) => {
@@ -468,12 +471,6 @@ export default function App() {
           ok: !deps.ffmpeg.startsWith("missing"),
           full: deps.ffmpeg,
         },
-        {
-          key: "ffprobe",
-          label: "ffprobe",
-          ok: !deps.ffprobe.startsWith("missing"),
-          full: deps.ffprobe,
-        },
         { key: "ytdlp", label: "yt-dlp", ok: !deps.ytDlp.startsWith("missing"), full: deps.ytDlp },
       ]
     : [];
@@ -516,23 +513,30 @@ export default function App() {
               title="How to use Reclip"
               onClick={() => setHelpOpen(true)}
             />
-            <span>
-              {engines.length === 0 && (
-                <Typography.Text type="secondary" className="text-xs mr-2">
-                  checking engines…
-                </Typography.Text>
-              )}
-              {engines.map((e) => (
-                <span
-                  key={e.key}
-                  title={e.full}
-                  className="inline-flex items-center gap-1.5 text-xs text-[#3d4759] dark:text-[#aeb6c2] mr-3"
-                >
-                  <span className={`dot ${e.ok ? "ok" : "bad"}`} />
-                  {e.label}
-                </span>
-              ))}
-            </span>
+            <Button
+              type="text"
+              size="small"
+              title="Setup — external tools (ffmpeg, yt-dlp)"
+              onClick={() => setSetupOpen(true)}
+            >
+              <span>
+                {engines.length === 0 && (
+                  <Typography.Text type="secondary" className="text-xs mr-2">
+                    checking engines…
+                  </Typography.Text>
+                )}
+                {engines.map((e) => (
+                  <span
+                    key={e.key}
+                    title={e.full}
+                    className="inline-flex items-center gap-1.5 text-xs text-[#3d4759] dark:text-[#aeb6c2] mr-2 last:mr-0"
+                  >
+                    <span className={`dot ${e.ok ? "ok" : "bad"}`} />
+                    {e.label}
+                  </span>
+                ))}
+              </span>
+            </Button>
             <Button
               type="primary"
               icon={<ExportOutlined />}
@@ -939,6 +943,7 @@ export default function App() {
         </Layout>
       </Layout>
       <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
+      <SetupModal open={setupOpen} onClose={() => setSetupOpen(false)} onChanged={refreshDeps} />
     </ConfigProvider>
   );
 }

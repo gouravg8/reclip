@@ -48,9 +48,9 @@ export default function HelpModal({ open, onClose }: Props) {
         Troubleshooting
       </Typography.Title>
       <Typography.Paragraph type="secondary" className="text-[13px]">
-        Red engine dots in the top bar mean ffmpeg, ffprobe, or yt-dlp wasn&apos;t found — install
-        them or point RECLIP_FFMPEG / RECLIP_FFPROBE / RECLIP_YTDLP at the binaries. If a link fails
-        to download, the site may be rate-limiting you; retry later or upload the file manually.
+        Red engine dots in the top bar mean ffmpeg or yt-dlp wasn&apos;t found — open Setup from the
+        engines badge to download or locate them. If a link fails to download, the site may be
+        rate-limiting you; retry later or upload the file manually.
       </Typography.Paragraph>
     </Modal>
   );

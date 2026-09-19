@@ -88,6 +88,16 @@ Section
 
     !insertmacro wails.files
 
+    # Reclip external engines. scripts/package-windows.ps1 places
+    # ffmpeg.exe and yt-dlp.exe into build\bin before the installer is
+    # compiled, so every install works out of the box with no PATH setup.
+    # resolveBin() finds them next to the executable.
+    # (Fatal on purpose: a missing file must fail the build loudly,
+    # not ship a broken installer.)
+    DetailPrint "Installing: Reclip engines (ffmpeg, yt-dlp)"
+    File "..\..\bin\ffmpeg.exe"
+    File "..\..\bin\yt-dlp.exe"
+
     CreateShortcut "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
     CreateShortCut "$DESKTOP\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
 

@@ -27,6 +27,46 @@ func makeTestVideo(t *testing.T) string {
 	return path
 }
 
+func TestParseFfmpegInfo(t *testing.T) {
+	sample := `Input #0, mov,mp4,m4a,3gp,3g2,mj2, from '/tmp/probe-sample.mp4':
+  Duration: 00:00:01.00, start: 0.000000, bitrate: 1885 kb/s
+  Stream #0:0[0x1](und): Video: h264 (High) (avc1 / 0x31637661), yuv420p(progressive), 640x960 [SAR 1:1 DAR 2:3], 1794 kb/s, 30 fps, 30 tbr, 15360 tbn (default)
+  Stream #0:1[0x2](und): Audio: aac (LC) (mp4a / 0x6134706D), 44100 Hz, mono, fltp, 70 kb/s (default)
+At least one output file must be specified
+`
+	info, err := parseFfmpegInfo(sample)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if info.duration != 1.0 {
+		t.Fatalf("duration = %v", info.duration)
+	}
+	if info.width != 640 || info.height != 960 {
+		t.Fatalf("dims = %dx%d", info.width, info.height)
+	}
+	if info.fps != 30 {
+		t.Fatalf("fps = %v", info.fps)
+	}
+	if !info.hasAudio {
+		t.Fatal("expected audio")
+	}
+
+	noAudio := `  Duration: 00:01:30.50, start: 0.000000, bitrate: 500 kb/s
+  Stream #0:0: Video: h264, yuv420p, 1080x1920, 25 fps
+`
+	info, err = parseFfmpegInfo(noAudio)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if info.duration != 90.5 || info.fps != 25 || info.hasAudio {
+		t.Fatalf("unexpected: %+v", info)
+	}
+
+	if _, err := parseFfmpegInfo("garbage\nno streams here\n"); err == nil {
+		t.Fatal("expected error for stream-less output")
+	}
+}
+
 func TestProbeVideo(t *testing.T) {
 	path := makeTestVideo(t)
 	app := NewApp()
@@ -92,11 +132,48 @@ func TestResolveBinEnvOverride(t *testing.T) {
 	}
 }
 
+func TestEnginePathRoundtrip(t *testing.T) {
+	t.Setenv("RECLIP_CONFIG_DIR", t.TempDir())
+	app := NewApp()
+	fake := filepath.Join(t.TempDir(), "ffmpeg-test")
+	if err := os.WriteFile(fake, []byte("x"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := app.SetEnginePath("ffmpeg", fake); err != nil {
+		t.Fatalf("Set: %v", err)
+	}
+	if got := app.GetEnginePaths()["ffmpeg"]; got != fake {
+		t.Fatalf("Get = %q, want %q", got, fake)
+	}
+	// Config fallback resolves through resolveBin (no env override set here).
+	t.Setenv("RECLIP_FFMPEG", "")
+	if got, err := ffmpegBin(); err != nil || got != fake {
+		t.Fatalf("resolveBin = %q, %v", got, err)
+	}
+	// Credit preset still works alongside engines in one file.
+	credit := filepath.Join(t.TempDir(), "c.mp4")
+	if err := os.WriteFile(credit, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := app.SaveCreditPreset(credit); err != nil {
+		t.Fatalf("SaveCredit: %v", err)
+	}
+	if got := app.GetCreditPreset(); got != credit {
+		t.Fatalf("credit lost: %q", got)
+	}
+	if got := app.GetEnginePaths()["ffmpeg"]; got != fake {
+		t.Fatalf("engine lost after credit save: %q", got)
+	}
+	if err := app.SetEnginePath("nope", fake); err == nil {
+		t.Fatal("expected error for unknown engine")
+	}
+}
+
 func TestCheckDepsPresent(t *testing.T) {
 	app := NewApp()
 	deps := app.CheckDeps()
 	for name, v := range map[string]string{
-		"ffmpeg": deps.Ffmpeg, "ffprobe": deps.Ffprobe, "yt-dlp": deps.YtDlp,
+		"ffmpeg": deps.Ffmpeg, "yt-dlp": deps.YtDlp,
 	} {
 		if v == "" || len(v) < 3 || v[:7] == "missing" {
 			t.Fatalf("%s unresolved: %q", name, v)
