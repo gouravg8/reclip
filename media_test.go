@@ -76,6 +76,22 @@ func TestCreditPresetRoundtrip(t *testing.T) {
 	}
 }
 
+func TestResolveBinEnvOverride(t *testing.T) {
+	fake := filepath.Join(t.TempDir(), "my-ffmpeg")
+	if err := os.WriteFile(fake, []byte("x"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("RECLIP_FFMPEG", fake)
+	got, err := ffmpegBin()
+	if err != nil || got != fake {
+		t.Fatalf("env override = %q, %v", got, err)
+	}
+	t.Setenv("RECLIP_FFMPEG", filepath.Join(t.TempDir(), "nope"))
+	if _, err := ffmpegBin(); err == nil {
+		t.Fatal("expected error for missing override path")
+	}
+}
+
 func TestCheckDepsPresent(t *testing.T) {
 	app := NewApp()
 	deps := app.CheckDeps()

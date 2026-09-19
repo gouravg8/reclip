@@ -26,6 +26,11 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 
+# Sidecar binaries (large, fetched via scripts/fetch-sidecars.sh)
+sidecar/windows/
+sidecar/linux/
+sidecar/darwin/
+
 # Logs
 *.log
 pnpm-debug.log*

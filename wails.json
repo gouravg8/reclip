@@ -2,6 +2,8 @@
   "$schema": "https://wails.io/schemas/config.v2.json",
   "name": "reclip",
   "outputfilename": "reclip",
+  "version": "0.1.0",
+  "description": "Batch Instagram reel downloader + editor + credit appender",
   "frontend:install": "pnpm install",
   "frontend:build": "pnpm run build",
   "frontend:dev:watcher": "pnpm run dev",
@@ -9,5 +11,12 @@
   "author": {
     "name": "Gourav soni",
     "email": "gouravsoni8476@gmail.com"
+  },
+  "info": {
+    "companyName": "Reclip",
+    "productName": "Reclip",
+    "productVersion": "0.1.0",
+    "copyright": "Reclip",
+    "comments": "Batch reel republisher with credit outro"
   }
 }
