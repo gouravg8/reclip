@@ -27,7 +27,7 @@ function Get-File($Url, $Out) {
 
 # --- ffmpeg (only if missing; ffprobe no longer needed) ---
 # NOTE: gyan.dev blocks datacenter downloads, so CI uses BtbN's GitHub
-# release instead (same CDN as the runner — reliable).
+# release instead (same CDN as the runner - reliable).
 if (-not (Test-Path (Join-Path $Bin "ffmpeg.exe"))) {
   $zip = Join-Path $tmp.FullName "ffmpeg.zip"
   Get-File "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip" $zip
@@ -57,7 +57,7 @@ Get-ChildItem $Bin -Include ffmpeg.exe, yt-dlp.exe | ForEach-Object {
 Push-Location $Root
 try {
   wails build --nsis
-  # Native exit codes don't trigger $ErrorActionPreference — check manually.
+  # Native exit codes don't trigger $ErrorActionPreference - check manually.
   if ($LASTEXITCODE -ne 0) { throw "wails build failed with exit code $LASTEXITCODE" }
 } finally {
   Pop-Location
@@ -67,5 +67,5 @@ Get-ChildItem (Join-Path $Bin "*installer*.exe") | ForEach-Object {
   Write-Host ("Installer: {0}" -f $_.FullName)
 }
 if (-not (Get-ChildItem (Join-Path $Bin "*installer*.exe"))) {
-  throw "No installer produced — NSIS step failed silently. See wails build output above."
+  throw "No installer produced - NSIS step failed silently. See wails build output above."
 }
