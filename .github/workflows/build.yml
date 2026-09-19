@@ -83,7 +83,8 @@ jobs:
       - name: Build
         run: |
           export PATH="$PATH:$(go env GOPATH)/bin"
-          wails build
+          # Ubuntu 24.04 ships webkit 4.1 (not 4.0) — this tag targets it.
+          wails build -tags webkit2_41
 
       - name: Pack with sidecars
         run: |

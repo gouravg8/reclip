@@ -31,11 +31,11 @@ fetch_linux() {
 fetch_windows() {
   local dir="$ROOT/sidecar/windows"
   mkdir -p "$dir"
-  echo "-> ffmpeg static (gyan.dev essentials)"
-  curl -fsSL -o /tmp/ffmpeg-win.zip "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
+  echo "-> ffmpeg (BtbN GitHub release, reliable on CI)"
+  curl -fsSL -o /tmp/ffmpeg-win.zip "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
   rm -rf /tmp/ffmpeg-win && mkdir -p /tmp/ffmpeg-win
   unzip -q -o /tmp/ffmpeg-win.zip -d /tmp/ffmpeg-win
-  cp /tmp/ffmpeg-win/ffmpeg-*-essentials_build/bin/ffmpeg.exe "$dir/"
+  cp /tmp/ffmpeg-win/ffmpeg-master-latest-win64-gpl/bin/ffmpeg.exe "$dir/"
   rm -rf /tmp/ffmpeg-win /tmp/ffmpeg-win.zip
   fetch_yt_dlp "$dir" "yt-dlp.exe"
 }

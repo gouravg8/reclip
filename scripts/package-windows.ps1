@@ -3,7 +3,7 @@
 .SYNOPSIS
   One-command Reclip release for Windows: fetch sidecars, build, NSIS installer.
 .DESCRIPTION
-  1. Downloads ffmpeg.exe + ffprobe.exe (gyan.dev essentials) and yt-dlp.exe
+  1. Downloads ffmpeg.exe (BtbN build) and yt-dlp.exe
      into build\bin next to the app binary.
   2. Runs `wails build --nsis`, whose project.nsi bundles those three files
      into the installer, so recipients need zero manual setup.
@@ -26,13 +26,15 @@ function Get-File($Url, $Out) {
 }
 
 # --- ffmpeg (only if missing; ffprobe no longer needed) ---
+# NOTE: gyan.dev blocks datacenter downloads, so CI uses BtbN's GitHub
+# release instead (same CDN as the runner — reliable).
 if (-not (Test-Path (Join-Path $Bin "ffmpeg.exe"))) {
   $zip = Join-Path $tmp.FullName "ffmpeg.zip"
-  Get-File "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" $zip
+  Get-File "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip" $zip
   $extract = Join-Path $tmp.FullName "ffmpeg"
   if (Test-Path $extract) { Remove-Item -Recurse -Force $extract }
   Expand-Archive -Path $zip -DestinationPath $extract
-  $bindir = Get-ChildItem -Directory (Join-Path $extract "ffmpeg-*-essentials_build") |
+  $bindir = Get-ChildItem -Directory $extract |
     ForEach-Object { Join-Path $_.FullName "bin" } | Select-Object -First 1
   Copy-Item (Join-Path $bindir "ffmpeg.exe") (Join-Path $Bin "ffmpeg.exe") -Force
 } else {
