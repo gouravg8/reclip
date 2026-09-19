@@ -1,19 +1,33 @@
 @import "tailwindcss";
 @import "@fontsource-variable/inter";
-@import "@fontsource/open-runde/400.css";
-@import "@fontsource/open-runde/500.css";
-@import "@fontsource/open-runde/600.css";
-@import "@fontsource/open-runde/700.css";
+
+/* Class-based dark mode (toggled on <html>). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Shared UI font (local asset, no CDN needed in Wails webview). */
+@font-face {
+  font-family: "Nunito";
+  src: url("./assets/fonts/nunito-v16-latin-regular.woff2") format("woff2");
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+}
 
 html {
   background-color: #f4f6f9;
   color: #1a2333;
+}
+.dark html,
+.dark body {
+  background-color: #0b0f14;
+  color: #e6e9ee;
 }
 
 body {
   margin: 0;
   color: #1a2333;
   font-family:
+    "Nunito",
     "Inter Variable",
     Inter,
     -apple-system,
@@ -27,34 +41,60 @@ body {
   font-feature-settings: "cv11", "ss01";
 }
 
-/* Display headings like the reference (Open Runde). */
+/* Display headings use the shared font too. */
 h1,
 h2,
 h3,
 h4,
-.display {
+.display,
+.ant-typography,
+.ant-btn,
+.ant-table,
+.ant-card,
+.ant-input,
+.ant-select {
   font-family:
-    "Open Runde",
+    "Nunito",
     "Inter Variable",
     Inter,
     -apple-system,
     "Segoe UI",
     sans-serif;
+}
+h1,
+h2,
+h3,
+h4,
+.display {
   letter-spacing: -0.02em;
 }
 
 #app {
   height: 100vh;
 }
-
-/* Sky/azure wash behind the content. Pure CSS. */
-.aurora {
+/* Sky/azure wash behind the content. Rendered as a FIXED layer
+   (see .aurora-bg) so scrolling never repaints the gradients. */
+.aurora-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
   background:
     radial-gradient(600px 220px at 12% -60px, rgba(2, 132, 199, 0.14), transparent 70%),
     radial-gradient(700px 260px at 88% -80px, rgba(165, 243, 252, 0.5), transparent 70%),
     radial-gradient(500px 200px at 50% -100px, rgba(14, 165, 233, 0.1), transparent 70%), #f4f6f9;
 }
-
+.dark .aurora-bg {
+  background:
+    radial-gradient(600px 220px at 12% -60px, rgba(2, 132, 199, 0.22), transparent 70%),
+    radial-gradient(700px 260px at 88% -80px, rgba(34, 211, 238, 0.1), transparent 70%),
+    radial-gradient(500px 200px at 50% -100px, rgba(14, 165, 233, 0.14), transparent 70%), #0b0f14;
+}
+/* Long sections skip rendering while off-screen (smoother scroll). */
+.section-cv {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 400px;
+}
 /* Small-caps section eyebrow, like the reference site labels. */
 .eyebrow {
   font-size: 11px;
@@ -62,6 +102,9 @@ h4,
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: #8a94a6;
+}
+.dark .eyebrow {
+  color: #7d8695;
 }
 
 /* Soft SaaS card: white, light border, gentle shadow. */
@@ -71,6 +114,12 @@ h4,
   box-shadow:
     0 1px 2px rgba(16, 24, 40, 0.04),
     0 8px 24px -12px rgba(16, 24, 40, 0.12) !important;
+}
+.dark .soft-card {
+  border-color: #232b36 !important;
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.4),
+    0 12px 32px -12px rgba(0, 0, 0, 0.6) !important;
 }
 
 /* Status dot. */

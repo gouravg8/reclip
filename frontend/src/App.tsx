@@ -12,10 +12,13 @@ import {
   Table,
   Tag,
   Typography,
+  theme,
 } from "antd";
 import {
   CheckCircleOutlined,
   DeleteOutlined,
+  MoonOutlined,
+  SunOutlined,
   DownloadOutlined,
   ExportOutlined,
   FolderOpenOutlined,
@@ -81,6 +84,12 @@ export default function App() {
   const [batchBusy, setBatchBusy] = useState(false);
   const [exporting, setExporting] = useState<string[]>([]);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [isDark, setIsDark] = useState(() => localStorage.getItem("reclip:theme") === "dark");
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", isDark);
+    localStorage.setItem("reclip:theme", isDark ? "dark" : "light");
+  }, [isDark]);
   const [notice, setNotice] = useState<{ type: "error" | "warning"; text: string } | null>(null);
 
   const activeId = useRef<string | null>(null);
@@ -472,17 +481,18 @@ export default function App() {
   return (
     <ConfigProvider
       theme={{
+        algorithm: isDark ? theme.darkAlgorithm : theme.defaultAlgorithm,
         token: {
           colorPrimary: "#0284c7",
           borderRadius: 10,
           colorBgLayout: "#f4f6f9",
           fontFamily:
-            '"Inter Variable", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+            '"Nunito", "Inter Variable", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
         },
       }}
     >
-      <Layout className="h-screen">
-        <Layout.Header className="!bg-white border-b border-[#e7eaf0] !h-14 flex items-center gap-3 px-5">
+      <Layout className="min-h-screen">
+        <Layout.Header className="sticky top-0 z-50 !bg-white dark:!bg-[#11161d] border-b border-[#e7eaf0] dark:border-[#232b36] !h-14 flex items-center gap-3 px-5">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-[#0284c7] text-white flex items-center justify-center text-base font-bold shadow-[0_4px_12px_-2px_rgba(2,132,199,0.5)]">
               R
@@ -494,6 +504,12 @@ export default function App() {
           </div>
           <div className="flex-1" />
           <Space>
+            <Button
+              type="text"
+              icon={isDark ? <SunOutlined /> : <MoonOutlined />}
+              title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+              onClick={() => setIsDark((d) => !d)}
+            />
             <Button
               type="text"
               icon={<QuestionCircleOutlined />}
@@ -510,7 +526,7 @@ export default function App() {
                 <span
                   key={e.key}
                   title={e.full}
-                  className="inline-flex items-center gap-1.5 text-xs text-[#3d4759] mr-3"
+                  className="inline-flex items-center gap-1.5 text-xs text-[#3d4759] dark:text-[#aeb6c2] mr-3"
                 >
                   <span className={`dot ${e.ok ? "ok" : "bad"}`} />
                   {e.label}
@@ -529,8 +545,9 @@ export default function App() {
           </Space>
         </Layout.Header>
 
-        <Layout className="aurora overflow-y-auto">
-          <Layout.Content className="p-6 max-w-6xl w-full mx-auto flex flex-col gap-5">
+        <Layout className="bg-[#f4f6f9] dark:bg-[#0b0f14]">
+          <div className="aurora-bg" aria-hidden />
+          <Layout.Content className="p-6 pb-12 max-w-6xl w-full mx-auto flex flex-col gap-5 relative z-10">
             <div className="flex items-end justify-between flex-wrap gap-3">
               <div>
                 <div className="eyebrow">Reclip studio</div>
@@ -567,7 +584,7 @@ export default function App() {
               />
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 section-cv">
               <div>
                 <div className="eyebrow pb-2">01 · Source</div>
                 <Card title="Add reels" className="soft-card">
@@ -676,7 +693,7 @@ export default function App() {
               </div>
             </div>
 
-            <div>
+            <div className="section-cv">
               <div className="eyebrow pb-2">03 · Lineup</div>
               <Card
                 title={`Queue — ${readyCount} of ${items.length} ready`}
@@ -700,7 +717,7 @@ export default function App() {
                   locale={{
                     emptyText: (
                       <div className="py-8 flex flex-col items-center gap-2">
-                        <div className="w-11 h-11 rounded-2xl bg-[#f0f9ff] text-[#0284c7] flex items-center justify-center text-xl">
+                        <div className="w-11 h-11 rounded-2xl bg-[#f0f9ff] dark:bg-[#0b2b3a] text-[#0284c7] dark:text-[#38bdf8] flex items-center justify-center text-xl">
                           <DownloadOutlined />
                         </div>
                         <Typography.Text strong>Nothing here yet</Typography.Text>
@@ -858,7 +875,7 @@ export default function App() {
               </Card>
             </div>
 
-            <div>
+            <div className="section-cv">
               <div className="eyebrow pb-2">04 · Polish</div>
               {selectedReady ? (
                 <Editor
@@ -868,7 +885,7 @@ export default function App() {
               ) : (
                 <Card className="soft-card">
                   <div className="py-6 flex flex-col items-center gap-2">
-                    <div className="w-11 h-11 rounded-2xl bg-[#f0f9ff] text-[#0284c7] flex items-center justify-center text-xl">
+                    <div className="w-11 h-11 rounded-2xl bg-[#f0f9ff] dark:bg-[#0b2b3a] text-[#0284c7] dark:text-[#38bdf8] flex items-center justify-center text-xl">
                       <ScissorOutlined />
                     </div>
                     <Typography.Text strong>
@@ -885,7 +902,7 @@ export default function App() {
               )}
             </div>
 
-            <div>
+            <div className="section-cv">
               <div className="eyebrow pb-2">05 · Ship</div>
               <Card
                 title="Export all — 1080×1920 + credit"
