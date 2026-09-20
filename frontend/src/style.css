@@ -14,12 +14,12 @@
 }
 
 html {
-  background-color: #f4f6f9;
+  background-color: #faf8f4;
   color: #1a2333;
 }
 .dark html,
 .dark body {
-  background-color: #0b0f14;
+  background-color: #0a0a0b;
   color: #e6e9ee;
 }
 
@@ -72,7 +72,7 @@ h4,
 #app {
   height: 100vh;
 }
-/* Sky/azure wash behind the content. Rendered as a FIXED layer
+/* Warm wash behind the content. Rendered as a FIXED layer
    (see .aurora-bg) so scrolling never repaints the gradients. */
 .aurora-bg {
   position: fixed;
@@ -80,21 +80,18 @@ h4,
   z-index: 0;
   pointer-events: none;
   background:
-    radial-gradient(600px 220px at 12% -60px, rgba(2, 132, 199, 0.14), transparent 70%),
-    radial-gradient(700px 260px at 88% -80px, rgba(165, 243, 252, 0.5), transparent 70%),
-    radial-gradient(500px 200px at 50% -100px, rgba(14, 165, 233, 0.1), transparent 70%), #f4f6f9;
+    radial-gradient(600px 220px at 12% -60px, rgba(249, 115, 22, 0.1), transparent 70%),
+    radial-gradient(700px 260px at 88% -80px, rgba(253, 186, 116, 0.35), transparent 70%),
+    radial-gradient(500px 200px at 50% -100px, rgba(234, 88, 12, 0.08), transparent 70%), #faf8f4;
 }
 .dark .aurora-bg {
   background:
-    radial-gradient(600px 220px at 12% -60px, rgba(2, 132, 199, 0.22), transparent 70%),
-    radial-gradient(700px 260px at 88% -80px, rgba(34, 211, 238, 0.1), transparent 70%),
-    radial-gradient(500px 200px at 50% -100px, rgba(14, 165, 233, 0.14), transparent 70%), #0b0f14;
+    radial-gradient(700px 260px at 70% -80px, rgba(249, 115, 22, 0.16), transparent 70%),
+    radial-gradient(500px 220px at 20% -60px, rgba(234, 88, 12, 0.12), transparent 70%),
+    radial-gradient(600px 300px at 50% 110%, rgba(249, 115, 22, 0.06), transparent 70%), #0a0a0b;
 }
-/* Long sections skip rendering while off-screen (smoother scroll). */
-.section-cv {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 400px;
-}
+/* NOTE: do NOT use content-visibility on sections containing <video> —
+   Chromium skips media loading inside auto subtrees and previews stay black. */
 /* Small-caps section eyebrow, like the reference site labels. */
 .eyebrow {
   font-size: 11px;

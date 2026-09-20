@@ -33,6 +33,8 @@ import {
   ExportBatch,
   ExportOne,
   GetCreditPreset,
+  GetDownloadDelay,
+  PreviewBase,
   ProbeVideo,
   SaveCreditPreset,
   SelectCreditFile,
@@ -86,7 +88,8 @@ export default function App() {
   const [exporting, setExporting] = useState<string[]>([]);
   const [helpOpen, setHelpOpen] = useState(false);
   const [setupOpen, setSetupOpen] = useState(false);
-  const [isDark, setIsDark] = useState(() => localStorage.getItem("reclip:theme") === "dark");
+  const [previewBase, setPreviewBase] = useState("");
+  const [isDark, setIsDark] = useState(() => localStorage.getItem("reclip:theme") !== "light");
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", isDark);
@@ -149,6 +152,9 @@ export default function App() {
   }, []);
   useEffect(() => {
     refreshDeps();
+    PreviewBase()
+      .then(setPreviewBase)
+      .catch(() => setPreviewBase(""));
     GetCreditPreset()
       .then(async (p) => {
         if (!p) return;
@@ -204,22 +210,43 @@ export default function App() {
 
   // Pump drains pendingRef until empty. Safe to call anytime; concurrent
   // calls no-op via busyRef. Links pasted mid-download are picked up.
+  // Between downloads it pauses (pacing + jitter) so bursts look human.
   const pump = useCallback(async () => {
     if (busyRef.current) return;
     busyRef.current = true;
     setBusy(true);
     try {
       const dir = localStorage.getItem(OUTDIR_KEY) ?? "";
+      let baseDelay = 0;
+      try {
+        baseDelay = await GetDownloadDelay();
+      } catch {
+        baseDelay = 0;
+      }
+      let first = true;
       for (;;) {
         const job = pendingRef.current.shift();
         if (!job) break;
+        if (!first && baseDelay > 0) {
+          const waitMs = Math.max(1000, Math.round(baseDelay * 1000 * (0.7 + Math.random() * 0.6)));
+          const t0 = Date.now();
+          for (;;) {
+            const left = Math.ceil((waitMs - (Date.now() - t0)) / 1000);
+            if (left <= 0) break;
+            patchItem(job.id, { progress: `cooling down ${left}s…` });
+            await new Promise((r) => setTimeout(r, 1000));
+          }
+        }
+        first = false;
+        const stillThere = itemsRef.current.some((it) => it.id === job.id);
+        if (!stillThere) continue;
         await downloadOne(job, dir);
       }
     } finally {
       busyRef.current = false;
       setBusy(false);
     }
-  }, [downloadOne]);
+  }, [downloadOne, patchItem]);
 
   const retryStuck = useCallback(() => {
     const jobs = itemsRef.current
@@ -384,8 +411,8 @@ export default function App() {
     return `${base}_reclip.mp4`;
   }
 
-  function buildJobJSON(it: QueueItem): string {
-    return JSON.stringify({
+  function buildJob(it: QueueItem) {
+    return {
       id: it.id,
       input: it.path,
       output: `${outDir}/${outputNameFor(it)}`,
@@ -398,7 +425,7 @@ export default function App() {
         panY: it.edit.panY,
       },
       creditPath: resolveCreditFor(it),
-    });
+    };
   }
 
   const exportOneItem = useCallback(
@@ -412,7 +439,7 @@ export default function App() {
       setExporting((prev) => [...prev, id]);
       patchItem(id, { exportState: { phase: "starting", frac: 0 } });
       try {
-        const res = await ExportOne(buildJobJSON(it));
+        const res = await ExportOne(JSON.stringify(buildJob(it)));
         if (res.error) {
           patchItem(id, { exportState: { phase: "error", frac: 0, error: res.error } });
         } else {
@@ -440,7 +467,7 @@ export default function App() {
       patchItem(it.id, { exportState: { phase: "queued", frac: 0 } });
     }
     try {
-      const results = await ExportBatch(JSON.stringify(ready.map(buildJobJSON)));
+      const results = await ExportBatch(JSON.stringify(ready.map(buildJob)));
       for (const res of results) {
         if (res.error) {
           patchItem(res.id, { exportState: { phase: "error", frac: 0, error: res.error } });
@@ -480,9 +507,9 @@ export default function App() {
       theme={{
         algorithm: isDark ? theme.darkAlgorithm : theme.defaultAlgorithm,
         token: {
-          colorPrimary: "#0284c7",
+          colorPrimary: "#f97316",
           borderRadius: 10,
-          colorBgLayout: "#f4f6f9",
+          colorBgLayout: "#faf8f4",
           fontFamily:
             '"Nunito", "Inter Variable", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
         },
@@ -491,7 +518,7 @@ export default function App() {
       <Layout className="min-h-screen">
         <Layout.Header className="sticky top-0 z-50 !bg-white dark:!bg-[#11161d] border-b border-[#e7eaf0] dark:border-[#232b36] !h-14 flex items-center gap-3 px-5">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-[#0284c7] text-white flex items-center justify-center text-base font-bold shadow-[0_4px_12px_-2px_rgba(2,132,199,0.5)]">
+            <div className="w-8 h-8 rounded-lg bg-[#f97316] text-white flex items-center justify-center text-base font-bold shadow-[0_4px_12px_-2px_rgba(249,115,22,0.5)]">
               R
             </div>
             <div>
@@ -549,7 +576,7 @@ export default function App() {
           </Space>
         </Layout.Header>
 
-        <Layout className="bg-[#f4f6f9] dark:bg-[#0b0f14]">
+        <Layout className="bg-[#faf8f4] dark:bg-[#0a0a0b]">
           <div className="aurora-bg" aria-hidden />
           <Layout.Content className="p-6 pb-12 max-w-6xl w-full mx-auto flex flex-col gap-5 relative z-10">
             <div className="flex items-end justify-between flex-wrap gap-3">
@@ -588,7 +615,7 @@ export default function App() {
               />
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 section-cv">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div>
                 <div className="eyebrow pb-2">01 · Source</div>
                 <Card title="Add reels" className="soft-card">
@@ -697,7 +724,7 @@ export default function App() {
               </div>
             </div>
 
-            <div className="section-cv">
+            <div>
               <div className="eyebrow pb-2">03 · Lineup</div>
               <Card
                 title={`Queue — ${readyCount} of ${items.length} ready`}
@@ -721,7 +748,7 @@ export default function App() {
                   locale={{
                     emptyText: (
                       <div className="py-8 flex flex-col items-center gap-2">
-                        <div className="w-11 h-11 rounded-2xl bg-[#f0f9ff] dark:bg-[#0b2b3a] text-[#0284c7] dark:text-[#38bdf8] flex items-center justify-center text-xl">
+                        <div className="w-11 h-11 rounded-2xl bg-[#fff7ed] dark:bg-[#2a1503] text-[#ea580c] dark:text-[#fdba74] flex items-center justify-center text-xl">
                           <DownloadOutlined />
                         </div>
                         <Typography.Text strong>Nothing here yet</Typography.Text>
@@ -771,7 +798,7 @@ export default function App() {
                       render: (_, it) => {
                         if (it.status === "error")
                           return <Typography.Text type="danger">{it.error}</Typography.Text>;
-                        if (it.status === "downloading")
+                        if (it.status === "downloading" || (it.status === "queued" && it.progress))
                           return (
                             <Typography.Text type="secondary">{it.progress ?? "…"}</Typography.Text>
                           );
@@ -879,17 +906,18 @@ export default function App() {
               </Card>
             </div>
 
-            <div className="section-cv">
+            <div>
               <div className="eyebrow pb-2">04 · Polish</div>
               {selectedReady ? (
                 <Editor
                   item={selectedReady}
+                  previewBase={previewBase}
                   onChange={(edit) => changeEdit(selectedReady.id, edit)}
                 />
               ) : (
                 <Card className="soft-card">
                   <div className="py-6 flex flex-col items-center gap-2">
-                    <div className="w-11 h-11 rounded-2xl bg-[#f0f9ff] dark:bg-[#0b2b3a] text-[#0284c7] dark:text-[#38bdf8] flex items-center justify-center text-xl">
+                    <div className="w-11 h-11 rounded-2xl bg-[#fff7ed] dark:bg-[#2a1503] text-[#ea580c] dark:text-[#fdba74] flex items-center justify-center text-xl">
                       <ScissorOutlined />
                     </div>
                     <Typography.Text strong>
@@ -906,7 +934,7 @@ export default function App() {
               )}
             </div>
 
-            <div className="section-cv">
+            <div>
               <div className="eyebrow pb-2">05 · Ship</div>
               <Card
                 title="Export all — 1080×1920 + credit"

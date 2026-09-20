@@ -12,6 +12,7 @@ import {
 
 interface Props {
   item: QueueItem;
+  previewBase: string;
   onChange: (edit: EditSpec) => void;
 }
 
@@ -20,7 +21,7 @@ function clamp(n: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, n));
 }
 
-export default function Editor({ item, onChange }: Props) {
+export default function Editor({ item, previewBase, onChange }: Props) {
   const duration = item.info?.duration ?? 0;
   const edit = item.edit;
   const end = edit.trimEnd > 0 ? edit.trimEnd : duration;
@@ -29,12 +30,14 @@ export default function Editor({ item, onChange }: Props) {
   const [now, setNow] = useState(0);
   const [cutStart, setCutStart] = useState(0);
   const [cutEnd, setCutEnd] = useState(0);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Reset playback position when switching videos.
   useEffect(() => {
     setNow(0);
     setCutStart(0);
     setCutEnd(0);
+    setLoadError(null);
   }, [item.id, item.path]);
 
   const set = useCallback(
@@ -81,13 +84,13 @@ export default function Editor({ item, onChange }: Props) {
     [edit.cuts, set],
   );
 
-  const src = `/localfile?path=${encodeURIComponent(item.path)}`;
+  const src = `${previewBase}/localfile?path=${encodeURIComponent(item.path)}`;
 
   return (
     <Card
       title={`Editing — ${item.name}`}
       className="soft-card"
-      extra={<Tag color="#0284c7">output ≈ {formatDuration(outputDuration(duration, edit))}</Tag>}
+      extra={<Tag color="#ea580c">output ≈ {formatDuration(outputDuration(duration, edit))}</Tag>}
     >
       <div className="flex flex-col md:flex-row gap-5">
         {/* Phone-frame preview */}
@@ -102,11 +105,21 @@ export default function Editor({ item, onChange }: Props) {
               preload="metadata"
               onTimeUpdate={onTimeUpdate}
               onSeeked={onTimeUpdate}
+              onError={() =>
+                setLoadError(
+                  "Preview failed to load this file. It may be moved, locked, or an unsupported codec — export uses ffmpeg directly and is unaffected.",
+                )
+              }
               className="w-full h-full object-contain"
               style={{
                 transform: `translate(${edit.panX}%, ${edit.panY}%) scale(${edit.zoom})`,
               }}
             />
+            {loadError && (
+              <div className="absolute inset-x-2 bottom-2 rounded-lg bg-black/80 text-white text-xs p-2">
+                {loadError}
+              </div>
+            )}
           </div>
         </div>
 

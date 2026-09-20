@@ -8,6 +8,9 @@ import (
 // App struct
 type App struct {
 	ctx context.Context
+	// previewBase is the loopback preview server URL ("" if unavailable,
+	// in which case the UI falls back to a relative /localfile URL).
+	previewBase string
 }
 
 // NewApp creates a new App application struct
@@ -19,6 +22,17 @@ func NewApp() *App {
 // so we can call the runtime methods
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	if base, err := startPreviewServer(); err == nil {
+		a.previewBase = base
+	} else {
+		println("preview server:", err.Error())
+	}
+}
+
+// PreviewBase returns the loopback preview server base URL for <video>.
+// Empty means the UI should use a relative /localfile URL (prod asset server).
+func (a *App) PreviewBase() string {
+	return a.previewBase
 }
 
 // Greet returns a greeting for the given name

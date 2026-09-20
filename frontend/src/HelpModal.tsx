@@ -49,8 +49,9 @@ export default function HelpModal({ open, onClose }: Props) {
       </Typography.Title>
       <Typography.Paragraph type="secondary" className="text-[13px]">
         Red engine dots in the top bar mean ffmpeg or yt-dlp wasn&apos;t found — open Setup from the
-        engines badge to download or locate them. If a link fails to download, the site may be
-        rate-limiting you; retry later or upload the file manually.
+        engines badge to download or locate them. If a download fails with “login required” or
+        “rate-limit”, add Instagram login in Setup (browser cookies or cookies.txt) and retry.
+        Private or deleted reels can&apos;t be downloaded — check the link opens while logged out.
       </Typography.Paragraph>
     </Modal>
   );

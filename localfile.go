@@ -1,7 +1,9 @@
 package main
 
 import (
+	"fmt"
 	"mime"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -68,4 +70,21 @@ func localFileHandler() http.Handler {
 // previewURL builds the webview URL for a local file preview.
 func previewURL(path string) string {
 	return "/localfile?path=" + url.QueryEscape(path)
+}
+
+// startPreviewServer serves /localfile on 127.0.0.1 and returns its base URL.
+//
+// Why a separate server: in `wails dev` the page is served by Vite, so a
+// relative /localfile URL hits Vite (404/HTML) and never reaches the
+// AssetServer handler — every preview fails. An absolute loopback URL works
+// identically in dev and production builds.
+func startPreviewServer() (string, error) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return "", fmt.Errorf("preview server listen: %w", err)
+	}
+	go func() {
+		_ = http.Serve(ln, localFileHandler())
+	}()
+	return "http://" + ln.Addr().String(), nil
 }

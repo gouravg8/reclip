@@ -14,6 +14,11 @@ import (
 type appConfig struct {
 	CreditPath string            `json:"creditPath"`
 	Engines    map[string]string `json:"engines,omitempty"`
+	// Cookies selects Instagram auth for downloads:
+	// "" (none), "browser:chrome", or "file:/path/to/cookies.txt".
+	Cookies string `json:"cookies,omitempty"`
+	// DownloadDelaySec pauses this long between downloads (0 = off).
+	DownloadDelaySec int `json:"downloadDelaySec,omitempty"`
 }
 
 // configDir returns the Reclip config dir. RECLIP_CONFIG_DIR overrides it
@@ -107,7 +112,74 @@ func (a *App) GetCreditPreset() string {
 	return credit
 }
 
-// engineTools are the config keys for explicit engine paths.
+// cookieBrowsers are the --cookies-from-browser choices offered in Setup.
+var cookieBrowsers = []string{"chrome", "chromium", "firefox", "edge", "brave"}
+
+// GetCookieSetting returns the saved Instagram auth ("", "browser:x", "file:...").
+func (a *App) GetCookieSetting() string {
+	return strings.TrimSpace(loadConfig().Cookies)
+}
+
+// SetCookieSetting saves Instagram auth. Accepts "" (none),
+// "browser:<chrome|chromium|firefox|edge|brave>", or "file:<cookies.txt path>".
+func (a *App) SetCookieSetting(value string) error {
+	value = strings.TrimSpace(value)
+	if value != "" {
+		if rest, ok := strings.CutPrefix(value, "browser:"); ok {
+			known := false
+			for _, b := range cookieBrowsers {
+				if rest == b {
+					known = true
+					break
+				}
+			}
+			if !known {
+				return fmt.Errorf("unsupported browser %q", rest)
+			}
+		} else if rest, ok := strings.CutPrefix(value, "file:"); ok {
+			if st, err := os.Stat(rest); err != nil || st.IsDir() {
+				return fmt.Errorf("cookies file not found: %q", rest)
+			}
+		} else {
+			return fmt.Errorf("use browser:<name> or file:<path>")
+		}
+	}
+	cfg := loadConfig()
+	cfg.Cookies = value
+	return saveConfig(cfg)
+}
+
+// cookieArgs translates the saved setting into yt-dlp flags.
+func cookieArgs() []string {
+	setting := strings.TrimSpace(loadConfig().Cookies)
+	if name, ok := strings.CutPrefix(setting, "browser:"); ok && name != "" {
+		return []string{"--cookies-from-browser", name}
+	}
+	if path, ok := strings.CutPrefix(setting, "file:"); ok && strings.TrimSpace(path) != "" {
+		return []string{"--cookies", strings.TrimSpace(path)}
+	}
+	return nil
+}
+
+// GetDownloadDelay returns the saved pause between downloads (seconds, 0 = off).
+func (a *App) GetDownloadDelay() int {
+	d := loadConfig().DownloadDelaySec
+	if d < 0 || d > 3600 {
+		return 0
+	}
+	return d
+}
+
+// SetDownloadDelay saves the pause between downloads (0–3600 seconds).
+func (a *App) SetDownloadDelay(sec int) error {
+	if sec < 0 || sec > 3600 {
+		return fmt.Errorf("delay must be 0–3600 seconds")
+	}
+	cfg := loadConfig()
+	cfg.DownloadDelaySec = sec
+	return saveConfig(cfg)
+}
+
 var engineTools = []string{"ffmpeg", "ytdlp"}
 
 func validEngineTool(tool string) bool {

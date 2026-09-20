@@ -214,16 +214,26 @@ func (a *App) DownloadReel(url, outputDir string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	// Fast path: anonymous CDN fetch, no login/session footprint.
+	// Falls back to yt-dlp below on any failure.
+	a.emit("reclip:download-progress", "trying direct link…")
+	if direct, derr := tryDirectDownload(url, outputDir); derr == nil {
+		a.emit("reclip:download-progress", "direct link OK")
+		return direct, nil
+	} else {
+		a.emit("reclip:download-progress", "direct unavailable, using yt-dlp…")
+	}
 	template := filepath.Join(outputDir, "%(title).50s [%(id)s].%(ext)s")
-	cmd := exec.Command(bin,
+	args := []string{
 		"--no-playlist",
 		"--newline",
 		"-f", "bv*+ba/b",
 		"--merge-output-format", "mp4",
 		"--print", "after_move:filepath",
-		"-o", template,
-		url,
-	)
+	}
+	args = append(args, cookieArgs()...)
+	args = append(args, "-o", template, url)
+	cmd := exec.Command(bin, args...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return "", err
@@ -236,14 +246,21 @@ func (a *App) DownloadReel(url, outputDir string) (string, error) {
 		return "", fmt.Errorf("start yt-dlp: %w", err)
 	}
 	// Stream progress: stdout carries the final filepath line(s),
-	// stderr carries [download] progress lines.
+	// stderr carries [download] progress lines. Stderr is also retained
+	// so failures can report yt-dlp's actual reason instead of a bare
+	// "exit status 1".
 	var printed []string
+	var errLines []string
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
 		sc := bufio.NewScanner(stderr)
 		for sc.Scan() {
-			a.emit("reclip:download-progress", sc.Text())
+			line := sc.Text()
+			a.emit("reclip:download-progress", line)
+			if trimmed := strings.TrimSpace(line); trimmed != "" {
+				errLines = append(errLines, trimmed)
+			}
 		}
 	}()
 	sc := bufio.NewScanner(stdout)
@@ -255,7 +272,7 @@ func (a *App) DownloadReel(url, outputDir string) (string, error) {
 	}
 	<-done
 	if err := cmd.Wait(); err != nil {
-		return "", fmt.Errorf("yt-dlp failed: %w", err)
+		return "", fmt.Errorf("yt-dlp failed: %s", ytDlpReason(errLines, err))
 	}
 	// Last printed existing file wins (after_move:filepath).
 	for i := len(printed) - 1; i >= 0; i-- {
@@ -264,6 +281,26 @@ func (a *App) DownloadReel(url, outputDir string) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("yt-dlp finished but no output file found")
+}
+
+// ytDlpReason builds a human-readable failure message from yt-dlp's
+// stderr tail (e.g. "ERROR: [Instagram] Login required"), falling back
+// to the raw exit error when there is no output.
+func ytDlpReason(errLines []string, err error) string {
+	// Prefer explicit ERROR lines, most recent first.
+	for i := len(errLines) - 1; i >= 0; i-- {
+		if strings.HasPrefix(errLines[i], "ERROR:") {
+			return strings.TrimSpace(strings.TrimPrefix(errLines[i], "ERROR:"))
+		}
+	}
+	if len(errLines) > 0 {
+		start := len(errLines) - 3
+		if start < 0 {
+			start = 0
+		}
+		return strings.Join(errLines[start:], " | ")
+	}
+	return err.Error()
 }
 
 // SelectVideoFiles opens a multi-file dialog for reel/credit videos.
@@ -302,6 +339,21 @@ func (a *App) SelectEngineBinary() (string, error) {
 		Title: "Locate program file",
 		Filters: []runtime.FileFilter{
 			{DisplayName: "Executables (*.exe)", Pattern: "*.exe"},
+			{DisplayName: "All files (*.*)", Pattern: "*.*"},
+		},
+	})
+}
+
+// SelectCookiesFile opens a file dialog for a Netscape cookies.txt file
+// (exported from the browser) used for Instagram login.
+func (a *App) SelectCookiesFile() (string, error) {
+	if a.ctx == nil {
+		return "", fmt.Errorf("dialogs unavailable (no app context)")
+	}
+	return runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+		Title: "Select cookies.txt",
+		Filters: []runtime.FileFilter{
+			{DisplayName: "Cookies (*.txt)", Pattern: "*.txt"},
 			{DisplayName: "All files (*.*)", Pattern: "*.*"},
 		},
 	})

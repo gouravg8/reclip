@@ -9,6 +9,35 @@ import (
 	"testing"
 )
 
+func TestPreviewServerServes(t *testing.T) {
+	base, err := startPreviewServer()
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	// Unknown app route through the same handler: 404 proves the server is up.
+	resp, err := http.Get(base + "/nope")
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", resp.StatusCode)
+	}
+
+	// A real video file streams with Range support.
+	video := makeTestVideo(t)
+	req, _ := http.NewRequest(http.MethodGet, base+"/localfile?path="+url.QueryEscape(video), nil)
+	req.Header.Set("Range", "bytes=0-99")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("range get: %v", err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusPartialContent {
+		t.Fatalf("range status = %d", res.StatusCode)
+	}
+}
+
 func TestLocalFileFullAndRange(t *testing.T) {
 	video := makeTestVideo(t)
 	h := localFileHandler()

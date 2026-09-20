@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -64,6 +65,83 @@ At least one output file must be specified
 
 	if _, err := parseFfmpegInfo("garbage\nno streams here\n"); err == nil {
 		t.Fatal("expected error for stream-less output")
+	}
+}
+
+func TestYtDlpReason(t *testing.T) {
+	err := ytDlpReason(
+		[]string{"[Instagram] Downloading", "ERROR: [Instagram] Login required"},
+		errors.New("exit status 1"),
+	)
+	if err != "[Instagram] Login required" {
+		t.Fatalf("got %q", err)
+	}
+	if got := ytDlpReason(nil, errors.New("exit status 1")); got != "exit status 1" {
+		t.Fatalf("fallback got %q", got)
+	}
+}
+
+func TestCookieSettingRoundtrip(t *testing.T) {
+	t.Setenv("RECLIP_CONFIG_DIR", t.TempDir())
+	app := NewApp()
+	if got := app.GetCookieSetting(); got != "" {
+		t.Fatalf("expected empty, got %q", got)
+	}
+	if err := app.SetCookieSetting("browser:chrome"); err != nil {
+		t.Fatalf("Set: %v", err)
+	}
+	if got := app.GetCookieSetting(); got != "browser:chrome" {
+		t.Fatalf("Get = %q", got)
+	}
+	args := cookieArgs()
+	if len(args) != 2 || args[0] != "--cookies-from-browser" || args[1] != "chrome" {
+		t.Fatalf("args = %v", args)
+	}
+	if err := app.SetCookieSetting("browser:safari"); err == nil {
+		t.Fatal("expected error for unsupported browser")
+	}
+	if err := app.SetCookieSetting("bogus"); err == nil {
+		t.Fatal("expected error for bad shape")
+	}
+	cookieFile := filepath.Join(t.TempDir(), "cookies.txt")
+	if err := os.WriteFile(cookieFile, []byte("# Netscape"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := app.SetCookieSetting("file:" + cookieFile); err != nil {
+		t.Fatalf("Set file: %v", err)
+	}
+	args = cookieArgs()
+	if len(args) != 2 || args[0] != "--cookies" || args[1] != cookieFile {
+		t.Fatalf("args = %v", args)
+	}
+	if err := app.SetCookieSetting(""); err != nil {
+		t.Fatalf("Clear: %v", err)
+	}
+	if got := app.GetCookieSetting(); got != "" {
+		t.Fatalf("expected empty after clear, got %q", got)
+	}
+	if args := cookieArgs(); len(args) != 0 {
+		t.Fatalf("expected no args, got %v", args)
+	}
+}
+
+func TestDownloadDelayRoundtrip(t *testing.T) {
+	t.Setenv("RECLIP_CONFIG_DIR", t.TempDir())
+	app := NewApp()
+	if got := app.GetDownloadDelay(); got != 0 {
+		t.Fatalf("expected 0, got %d", got)
+	}
+	if err := app.SetDownloadDelay(15); err != nil {
+		t.Fatalf("Set: %v", err)
+	}
+	if got := app.GetDownloadDelay(); got != 15 {
+		t.Fatalf("Get = %d", got)
+	}
+	if err := app.SetDownloadDelay(-1); err == nil {
+		t.Fatal("expected error for negative delay")
+	}
+	if err := app.SetDownloadDelay(99999); err == nil {
+		t.Fatal("expected error for huge delay")
 	}
 }
 
